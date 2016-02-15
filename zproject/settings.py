@@ -120,11 +120,18 @@ DEFAULT_SETTINGS = {'TWITTER_CONSUMER_KEY': '',
                     'S3_BUCKET': '',
                     'S3_AVATAR_BUCKET': '',
                     'LOCAL_UPLOADS_DIR': None,
+                    'MAX_FILE_UPLOAD_SIZE': 25,
                     'DROPBOX_APP_KEY': '',
                     'ERROR_REPORTING': True,
                     'JWT_AUTH_KEYS': {},
                     'NAME_CHANGES_DISABLED': False,
                     'DEPLOYMENT_ROLE_NAME': "",
+                    'RABBITMQ_HOST': 'localhost',
+                    'RABBITMQ_USERNAME': 'zulip',
+                    'MEMCACHED_LOCATION': '127.0.0.1:11211',
+                    'RATE_LIMITING': True,
+                    'REDIS_HOST': '127.0.0.1',
+                    'REDIS_PORT': 6379,
                     # The following bots only exist in non-VOYAGER installs
                     'ERROR_BOT': None,
                     'NEW_USER_BOT': None,
@@ -149,6 +156,7 @@ DEFAULT_SETTINGS = {'TWITTER_CONSUMER_KEY': '',
                     'ZULIP_COM_STAGING': False,
                     'STATSD_HOST': '',
                     'REMOTE_POSTGRES_HOST': '',
+                    'REMOTE_POSTGRES_SSLMODE': '',
                     'GOOGLE_CLIENT_ID': '',
                     'DBX_APNS_CERT_FILE': None,
                     }
@@ -311,14 +319,20 @@ elif REMOTE_POSTGRES_HOST != '':
     DATABASES['default'].update({
             'HOST': REMOTE_POSTGRES_HOST,
             })
-    DATABASES['default']['OPTIONS']['sslmode'] = 'verify-full'
+    if get_secret("postgres_password") is not None:
+        DATABASES['default'].update({
+            'PASSWORD': get_secret("postgres_password"),
+            })
+    if REMOTE_POSTGRES_SSLMODE != '':
+        DATABASES['default']['OPTIONS']['sslmode'] = REMOTE_POSTGRES_SSLMODE
+    else:
+        DATABASES['default']['OPTIONS']['sslmode'] = 'verify-full'
 
 ########################################################################
 # RABBITMQ CONFIGURATION
 ########################################################################
 
 USING_RABBITMQ = True
-RABBITMQ_USERNAME = 'zulip'
 RABBITMQ_PASSWORD = get_secret("rabbitmq_password")
 
 ########################################################################
@@ -330,7 +344,7 @@ SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
 CACHES = {
     'default': {
         'BACKEND':  'django.core.cache.backends.memcached.PyLibMCCache',
-        'LOCATION': '127.0.0.1:11211',
+        'LOCATION': MEMCACHED_LOCATION,
         'TIMEOUT':  3600
     },
     'database': {
@@ -349,10 +363,6 @@ CACHES = {
 ########################################################################
 # REDIS-BASED RATE LIMITING CONFIGURATION
 ########################################################################
-
-RATE_LIMITING = True
-REDIS_HOST = '127.0.0.1'
-REDIS_PORT = 6379
 
 RATE_LIMITING_RULES = [
     (60, 100),     # 100 requests max every minute
@@ -846,9 +856,19 @@ LOGGING = {
             'level':    'INFO',
             'propagate': False,
         },
+        'zulip.queue': {
+            'handlers': ['console', 'file', 'errors_file'],
+            'level':    'WARNING',
+            'propagate': False,
+        },
         'zulip.management': {
             'handlers': ['file', 'errors_file'],
             'level':    'INFO',
+            'propagate': False,
+        },
+        'requests': {
+            'handlers': ['console', 'file', 'errors_file'],
+            'level':    'WARNING',
             'propagate': False,
         },
         ## Uncomment the following to get all database queries logged to the console
@@ -918,6 +938,10 @@ else:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 
 EMAIL_HOST_PASSWORD = get_secret('email_password')
+if "EMAIL_GATEWAY_PASSWORD" not in vars():
+    EMAIL_GATEWAY_PASSWORD = get_secret('email_gateway_password')
+if "AUTH_LDAP_BIND_PASSWORD" not in vars():
+    AUTH_LDAP_BIND_PASSWORD = get_secret('auth_ldap_bind_password')
 
 ########################################################################
 # MISC SETTINGS

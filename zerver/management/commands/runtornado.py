@@ -21,10 +21,23 @@ from tornado import ioloop
 from zerver.lib.debug import interactive_debug_listen
 from zerver.lib.response import json_response
 from zerver.lib.event_queue import process_notification, missedmessage_hook
-from zerver.lib.event_queue import setup_event_queue, add_client_gc_hook
+from zerver.lib.event_queue import setup_event_queue, add_client_gc_hook, \
+    get_descriptor_by_handler_id
+from zerver.lib.handlers import allocate_handler_id
 from zerver.lib.queue import setup_tornado_rabbitmq
 from zerver.lib.socket import get_sockjs_router, respond_send_message
 from zerver.middleware import async_request_stop
+
+from threading import Lock
+from django.core.handlers import base
+from django.core.urlresolvers import set_script_prefix
+from django.core import signals
+from tornado.wsgi import WSGIContainer
+from django.core.handlers.wsgi import WSGIRequest, get_script_name
+from six.moves import urllib
+from django import http
+from django.core import exceptions, urlresolvers
+from django.conf import settings
 
 if settings.USING_RABBITMQ:
     from zerver.lib.queue import get_queue_client
@@ -59,7 +72,7 @@ class Command(BaseCommand):
             addr = '127.0.0.1'
 
         if not port.isdigit():
-            raise CommandError("%r is not a valid port number." % port)
+            raise CommandError("%r is not a valid port number." % (port,))
 
         xheaders = options.get('xheaders', True)
         no_keep_alive = options.get('no_keep_alive', False)
@@ -121,10 +134,6 @@ class Command(BaseCommand):
 #
 #  Modify the base Tornado handler for Django
 #
-from threading import Lock
-from django.core.handlers import base
-from django.core.urlresolvers import set_script_prefix
-from django.core import signals
 
 class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
     initLock = Lock()
@@ -142,14 +151,11 @@ class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
         self.initLock.release()
         self._auto_finish = False
         self.client_descriptor = None
+        allocate_handler_id(self)
 
-    def get(self):
-        from tornado.wsgi import WSGIContainer
-        from django.core.handlers.wsgi import WSGIRequest, get_script_name
-        import urllib
-
+    def get(self, *args, **kwargs):
         environ  = WSGIContainer.environ(self.request)
-        environ['PATH_INFO'] = urllib.unquote(environ['PATH_INFO'])
+        environ['PATH_INFO'] = urllib.parse.unquote(environ['PATH_INFO'])
         request  = WSGIRequest(environ)
         request._tornado_handler     = self
 
@@ -175,26 +181,23 @@ class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
         self.finish()
 
 
-    def head(self):
-        self.get()
+    def head(self, *args, **kwargs):
+        self.get(*args, **kwargs)
 
-    def post(self):
-        self.get()
+    def post(self, *args, **kwargs):
+        self.get(*args, **kwargs)
 
-    def delete(self):
-        self.get()
+    def delete(self, *args, **kwargs):
+        self.get(*args, **kwargs)
 
     def on_connection_close(self):
-        if self.client_descriptor is not None:
-            self.client_descriptor.disconnect_handler(client_closed=True)
+        client_descriptor = get_descriptor_by_handler_id(self.handler_id)
+        if client_descriptor is not None:
+            client_descriptor.disconnect_handler(client_closed=True)
 
     # Based on django.core.handlers.base: get_response
     def get_response(self, request):
         "Returns an HttpResponse object for the given HttpRequest"
-        from django import http
-        from django.core import exceptions, urlresolvers
-        from django.conf import settings
-
         try:
             try:
                 # Setup default url resolver for this thread.
@@ -238,7 +241,7 @@ class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
                         response = callback(request, *callback_args, **callback_kwargs)
                         if response is RespondAsynchronously:
                             async_request_stop(request)
-                            return
+                            return None
                     except Exception as e:
                         # If the view raised an exception, run it through exception
                         # middleware, and if the exception middleware returns a

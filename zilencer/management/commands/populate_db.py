@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from __future__ import division
 from __future__ import print_function
 
 from django.core.management.base import BaseCommand
@@ -167,7 +168,7 @@ class Command(BaseCommand):
         threads = options["threads"]
         jobs = []
         for i in range(threads):
-            count = options["num_messages"] / threads
+            count = options["num_messages"] // threads
             if i < options["num_messages"] % threads:
                 count += 1
             jobs.append((count, personals_pairs, options, self.stdout.write))
@@ -369,7 +370,7 @@ def restore_saved_messages():
 
     event_glob = os.path.join(settings.EVENT_LOG_DIR, 'events.*')
     for filename in sorted(glob.glob(event_glob)):
-        with file(filename, "r") as message_log:
+        with open(filename, "r") as message_log:
             for line in message_log.readlines():
                 process_line(line)
 
@@ -393,7 +394,7 @@ def restore_saved_messages():
         clients[client.name] = client
 
     print(datetime.datetime.now(), "Creating streams...")
-    bulk_create_streams(realms, stream_dict.values())
+    bulk_create_streams(realms, list(stream_dict.values()))
 
     streams = {}
     for stream in Stream.objects.all():
@@ -657,9 +658,9 @@ def restore_saved_messages():
                          active=pending_subs[pending_sub])
         subscriptions_to_add.append(s)
     Subscription.objects.bulk_create(subscriptions_to_add)
-    for (sub, active) in subscriptions_to_change:
-        current_subs_obj[sub].active = active
-        current_subs_obj[sub].save(update_fields=["active"])
+    for (sub_tuple, active) in subscriptions_to_change:
+        current_subs_obj[sub_tuple].active = active
+        current_subs_obj[sub_tuple].save(update_fields=["active"])
 
     subs = {}
     for sub in Subscription.objects.all():
@@ -699,7 +700,7 @@ def restore_saved_messages():
 def send_messages(data):
     (tot_messages, personals_pairs, options, output) = data
     random.seed(os.getpid())
-    texts = file("zilencer/management/commands/test_messages.txt", "r").readlines()
+    texts = open("zilencer/management/commands/test_messages.txt", "r").readlines()
     offset = random.randint(0, len(texts))
 
     recipient_streams = [klass.id for klass in
@@ -715,7 +716,7 @@ def send_messages(data):
     random_max = 1000000
     recipients = {}
     while num_messages < tot_messages:
-        saved_data = ''
+        saved_data = {}
         message = Message()
         message.sending_client = get_client('populate_db')
         length = random.randint(1, 5)
@@ -730,10 +731,10 @@ def send_messages(data):
             # Use an old recipient
             message_type, recipient_id, saved_data = recipients[num_messages - 1]
             if message_type == Recipient.PERSONAL:
-                personals_pair = saved_data
+                personals_pair = saved_data['personals_pair']
                 random.shuffle(personals_pair)
             elif message_type == Recipient.STREAM:
-                message.subject = saved_data
+                message.subject = saved_data['subject']
                 message.recipient = get_recipient_by_id(recipient_id)
             elif message_type == Recipient.HUDDLE:
                 message.recipient = get_recipient_by_id(recipient_id)
@@ -755,14 +756,14 @@ def send_messages(data):
             message.recipient = Recipient.objects.get(type=Recipient.PERSONAL,
                                                          type_id=personals_pair[0])
             message.sender = get_user_profile_by_id(personals_pair[1])
-            saved_data = personals_pair
+            saved_data['personals_pair'] = personals_pair
         elif message_type == Recipient.STREAM:
             stream = Stream.objects.get(id=message.recipient.type_id)
             # Pick a random subscriber to the stream
             message.sender = random.choice(Subscription.objects.filter(
                     recipient=message.recipient)).user_profile
             message.subject = stream.name + str(random.randint(1, 3))
-            saved_data = message.subject
+            saved_data['subject'] = message.subject
 
         message.pub_date = now()
         do_send_message(message)

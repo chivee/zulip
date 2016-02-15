@@ -25,7 +25,7 @@ from zerver.lib.session_user import get_session_dict_user
 import re
 import ujson
 
-from urlparse import urlparse
+from six.moves import urllib
 from six.moves import range
 
 
@@ -64,15 +64,15 @@ class PublicURLTest(TestCase):
                      401: ["/json/get_public_streams",
                            "/json/get_old_messages",
                            "/json/update_pointer",
-                           "/json/send_message",
+                           "/json/messages",
                            "/json/invite_users",
                            "/json/settings/change",
                            "/json/subscriptions/remove",
                            "/json/subscriptions/exists",
-                           "/json/subscriptions/add",
                            "/json/subscriptions/property",
                            "/json/get_subscribers",
                            "/json/fetch_api_key",
+                           "/json/users/me/subscriptions",
                            "/api/v1/users/me/subscriptions",
                            ],
                      400: ["/api/v1/send_message",
@@ -338,7 +338,7 @@ dave-test@zulip.com
 
 earl-test@zulip.com""", ["Denmark"]))
         for user in ("bob", "carol", "dave", "earl"):
-            self.assertTrue(find_key_by_email("%s-test@zulip.com" % user))
+            self.assertTrue(find_key_by_email("%s-test@zulip.com" % (user,)))
         self.check_sent_emails(["bob-test@zulip.com", "carol-test@zulip.com",
                                 "dave-test@zulip.com", "earl-test@zulip.com"])
 
@@ -471,7 +471,7 @@ class EmailUnsubscribeTests(AuthedTestCase):
 
         unsubscribe_link = one_click_unsubscribe_link(user_profile,
                                                       "missed_messages")
-        result = self.client.get(urlparse(unsubscribe_link).path)
+        result = self.client.get(urllib.parse.urlparse(unsubscribe_link).path)
 
         self.assertEqual(result.status_code, 200)
         # Circumvent user_profile caching.
@@ -493,7 +493,7 @@ class EmailUnsubscribeTests(AuthedTestCase):
 
         # Simulate unsubscribing from the welcome e-mails.
         unsubscribe_link = one_click_unsubscribe_link(user_profile, "welcome")
-        result = self.client.get(urlparse(unsubscribe_link).path)
+        result = self.client.get(urllib.parse.urlparse(unsubscribe_link).path)
 
         # The welcome email jobs are no longer scheduled.
         self.assertEqual(result.status_code, 200)
@@ -519,7 +519,7 @@ class EmailUnsubscribeTests(AuthedTestCase):
 
         # Simulate unsubscribing from digest e-mails.
         unsubscribe_link = one_click_unsubscribe_link(user_profile, "digest")
-        result = self.client.get(urlparse(unsubscribe_link).path)
+        result = self.client.get(urllib.parse.urlparse(unsubscribe_link).path)
 
         # The setting is toggled off, and scheduled jobs have been removed.
         self.assertEqual(result.status_code, 200)

@@ -14,9 +14,8 @@ from twisted.web      import proxy, server, resource
 from twisted.web.http import Request
 orig_finish = Request.finish
 def patched_finish(self):
-    if self._disconnected:
-        return
-    return orig_finish(self)
+    if not self._disconnected:
+        orig_finish(self)
 Request.finish = patched_finish
 
 if 'posix' in os.name and os.geteuid() == 0:
@@ -47,7 +46,6 @@ parser.add_option('--interface',
 (options, args) = parser.parse_args()
 
 base_port   = 9991
-manage_args = ''
 if options.test:
     base_port   = 9981
     settings_module = "zproject.test_settings"
@@ -77,7 +75,7 @@ os.setpgrp()
 # zulip/urls.py.
 cmds = [['./tools/compile-handlebars-templates', 'forever'],
         ['./tools/webpack', 'watch'],
-        ['python', 'manage.py', 'runserver', '--nostatic'] +
+        ['python', 'manage.py', 'rundjango'] +
           manage_args + ['localhost:%d' % (django_port,)],
         ['python', 'manage.py', 'runtornado'] +
           manage_args + ['localhost:%d' % (tornado_port,)],

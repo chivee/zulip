@@ -22,16 +22,15 @@ from zerver.models import (
 
 from zerver.lib.actions import (
     create_stream_if_needed, do_add_default_stream, do_add_subscription,
-    do_change_is_admin, do_remove_default_stream, gather_subscriptions,
+    do_change_is_admin, do_create_realm, do_remove_default_stream, gather_subscriptions,
     get_default_streams_for_realm, get_realm, get_stream,
     get_user_profile_by_email, set_default_streams,
 )
 
 import random
 import ujson
-import urllib
 import six
-from six.moves import range
+from six.moves import range, urllib
 
 
 class StreamAdminTest(AuthedTestCase):
@@ -262,7 +261,7 @@ class StreamAdminTest(AuthedTestCase):
 
         # Even if you could guess the new name, you can't subscribe to it.
         result = self.client.post(
-            "/json/subscriptions/add",
+            "/json/users/me/subscriptions",
             {"subscriptions": ujson.dumps([{"name": deactivated_stream_name}])})
         self.assert_json_error(
             result, "Unable to access stream (%s)." % (deactivated_stream_name,))
@@ -419,9 +418,19 @@ class DefaultStreamTest(AuthedTestCase):
         return set(stream_names)
 
     def test_set_default_streams(self):
-        realm = get_realm("zulip.com")
+        (realm, _) = do_create_realm("testrealm.com", "Test Realm")
         stream_names = ['apple', 'banana', 'Carrot Cake']
         expected_names = stream_names + ['zulip']
+        set_default_streams(realm, stream_names)
+        stream_names = self.get_default_stream_names(realm)
+        self.assertEqual(stream_names, set(expected_names))
+
+    def test_set_default_streams_no_notifications_stream(self):
+        (realm, _) = do_create_realm("testrealm.com", "Test Realm")
+        realm.notifications_stream = None
+        realm.save(update_fields=["notifications_stream"])
+        stream_names = ['apple', 'banana', 'Carrot Cake']
+        expected_names = stream_names
         set_default_streams(realm, stream_names)
         stream_names = self.get_default_stream_names(realm)
         self.assertEqual(stream_names, set(expected_names))
@@ -698,7 +707,7 @@ class SubscriptionAPITest(AuthedTestCase):
 
     def test_successful_subscriptions_add(self):
         """
-        Calling /json/subscriptions/add should successfully add streams, and
+        Calling POST /json/users/me/subscriptions should successfully add streams, and
         should determine which are new subscriptions vs which were already
         subscribed. We randomly generate stream names to add, because it
         doesn't matter whether the stream already exists.
@@ -714,7 +723,7 @@ class SubscriptionAPITest(AuthedTestCase):
 
     def test_successful_subscriptions_notifies_pm(self):
         """
-        Calling /json/subscriptions/add should notify when a new stream is created.
+        Calling POST /json/users/me/subscriptions should notify when a new stream is created.
         """
         invitee = "iago@zulip.com"
         invitee_full_name = 'Iago'
@@ -743,7 +752,7 @@ class SubscriptionAPITest(AuthedTestCase):
 
     def test_successful_subscriptions_notifies_stream(self):
         """
-        Calling /json/subscriptions/add should notify when a new stream is created.
+        Calling POST /json/users/me/subscriptions should notify when a new stream is created.
         """
         invitee = "iago@zulip.com"
         invitee_full_name = 'Iago'
@@ -781,10 +790,15 @@ class SubscriptionAPITest(AuthedTestCase):
 
     def test_successful_subscriptions_notifies_with_escaping(self):
         """
-        Calling /json/subscriptions/add should notify when a new stream is created.
+        Calling POST /json/users/me/subscriptions should notify when a new stream is created.
         """
         invitee = "iago@zulip.com"
         invitee_full_name = 'Iago'
+
+        current_stream = self.get_streams(invitee)[0]
+        notifications_stream = Stream.objects.get(name=current_stream, realm=self.realm)
+        self.realm.notifications_stream = notifications_stream
+        self.realm.save()
 
         invite_streams = ['strange ) \\ test']
         result = self.common_subscribe_to_streams(
@@ -800,7 +814,7 @@ class SubscriptionAPITest(AuthedTestCase):
         msg = Message.objects.latest('id')
         self.assertEqual(msg.sender_id,
                          get_user_profile_by_email('notification-bot@zulip.com').id)
-        expected_msg = "Hi there!  %s just created a new stream '%s'. " \
+        expected_msg = "%s just created a new stream `%s`. " \
                        "!_stream_subscribe_button(strange \\) \\\\ test)" % (
                                                           invitee_full_name,
                                                           invite_streams[0])
@@ -815,7 +829,7 @@ class SubscriptionAPITest(AuthedTestCase):
 
     def test_subscriptions_add_too_long(self):
         """
-        Calling /json/subscriptions/add on a stream whose name is >60
+        Calling POST /json/users/me/subscriptions on a stream whose name is >60
         characters should return a JSON error.
         """
         # character limit is 60 characters
@@ -835,7 +849,7 @@ class SubscriptionAPITest(AuthedTestCase):
 
     def test_subscriptions_add_invalid_stream(self):
         """
-        Calling /json/subscriptions/add on a stream whose name is invalid (as
+        Calling POST /json/users/me/subscriptions on a stream whose name is invalid (as
         defined by valid_stream_name in zerver/views.py) should return a JSON
         error.
         """
@@ -847,7 +861,7 @@ class SubscriptionAPITest(AuthedTestCase):
 
     def assert_adding_subscriptions_for_principal(self, invitee, streams, invite_only=False):
         """
-        Calling /json/subscriptions/add on behalf of another principal (for
+        Calling POST /json/users/me/subscriptions on behalf of another principal (for
         whom you have permission to add subscriptions) should successfully add
         those subscriptions and send a message to the subscribee notifying
         them.
@@ -871,7 +885,7 @@ class SubscriptionAPITest(AuthedTestCase):
                         "subscribed you to the %sstream [%s](#narrow/stream/%s)."
                         % (self.user_profile.full_name,
                            '**invite-only** ' if invite_only else '',
-                           streams[0], urllib.quote(streams[0].encode('utf-8'))))
+                           streams[0], urllib.parse.quote(streams[0].encode('utf-8'))))
 
         if not Stream.objects.get(name=streams[0]).invite_only:
             expected_msg += ("\nYou can see historical content on a "

@@ -273,6 +273,25 @@ class WorkerTest(TestCase):
         event = ujson.loads(line.split('\t')[1])
         self.assertEqual(event, 'unexpected behaviour')
 
+    def test_worker_noname(self):
+        class TestWorker(queue_processors.QueueProcessingWorker):
+            def __init__(self):
+                super(TestWorker, self).__init__()
+            def consume(self, data):
+                pass
+        with self.assertRaises(queue_processors.WorkerDeclarationException):
+            TestWorker()
+
+    def test_worker_noconsume(self):
+        @queue_processors.assign_queue('test_worker')
+        class TestWorker(queue_processors.QueueProcessingWorker):
+            def __init__(self):
+                super(TestWorker, self).__init__()
+
+        with self.assertRaises(queue_processors.WorkerDeclarationException):
+            worker = TestWorker()
+            worker.consume({})
+
 class ActivityTest(AuthedTestCase):
     def test_activity(self):
         self.login("hamlet@zulip.com")
@@ -1117,7 +1136,7 @@ class UserPresenceTests(AuthedTestCase):
             self.assertEqual(json['presences'][email][client]['status'], 'idle')
             self.assertIn('timestamp', json['presences'][email][client])
             self.assertIsInstance(json['presences'][email][client]['timestamp'], int)
-            self.assertEqual(json['presences'].keys(), ['hamlet@zulip.com'])
+            self.assertEqual(list(json['presences'].keys()), ['hamlet@zulip.com'])
             return json['presences'][email][client]['timestamp']
 
         result = self.client.post("/json/update_active_status", {'status': 'idle'})
@@ -1134,7 +1153,7 @@ class UserPresenceTests(AuthedTestCase):
         json = ujson.loads(result.content)
         self.assertEqual(json['presences'][email][client]['status'], 'idle')
         self.assertEqual(json['presences']['hamlet@zulip.com'][client]['status'], 'idle')
-        self.assertEqual(json['presences'].keys(), ['hamlet@zulip.com', 'othello@zulip.com'])
+        self.assertEqual(list(json['presences'].keys()), ['hamlet@zulip.com', 'othello@zulip.com'])
         newer_timestamp = json['presences'][email][client]['timestamp']
         self.assertGreaterEqual(newer_timestamp, timestamp)
 
@@ -1265,7 +1284,7 @@ class AlertWordTests(AuthedTestCase):
 
         realm_words = alert_words_in_realm(user2.realm)
         self.assertEqual(len(realm_words), 2)
-        self.assertEqual(realm_words.keys(), [user1.id, user2.id])
+        self.assertEqual(list(realm_words.keys()), [user1.id, user2.id])
         self.assertEqual(realm_words[user1.id],
                          self.interesting_alert_word_list)
         self.assertEqual(realm_words[user2.id], ['another'])

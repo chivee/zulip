@@ -24,10 +24,13 @@ lib2to3.fixes.fix_types
 lib2to3.fixes.fix_ws_comma
 lib2to3.fixes.fix_xreadlines
 libfuturize.fixes.fix_absolute_import
+libfuturize.fixes.fix_future_standard_library_urllib
 libfuturize.fixes.fix_next_call
 libfuturize.fixes.fix_print_with_import
 libfuturize.fixes.fix_raise
 libmodernize.fixes.fix_basestring
+libfuturize.fixes.fix_division_safe
+libmodernize.fixes.fix_file
 libmodernize.fixes.fix_filter
 libmodernize.fixes.fix_imports_six
 libmodernize.fixes.fix_input_six
@@ -42,10 +45,51 @@ libpasteurize.fixes.fix_newstyle
 
 echo; echo "Testing for additions of Python 2 patterns we've removed as part of moving towards Python 3 compatibility."; echo
 
+failed=0
 for fixer in $fixers; do
     echo "Running Python 3 compatibility test $fixer"
     futurize -f $fixer -j4 -n -w . >/dev/null 2>/dev/null
-    git diff --exit-code || (echo; echo "Python 3 compatibility error(s) detected!  See diff above for what you need to change." && exit 1)
+    if ! git diff --exit-code; then
+        # Clear the output from this one
+        git reset --hard >/dev/null
+        failed=1
+    fi
 done
 
-echo "No issues detected!"
+# The dict fixer tries to add list() even in for loops over an
+# iterator where it's just counterproductive.  To address this, we run
+# the fixer but check for lines which don't include code that works
+# with iterators (currently for, join, and from_iterable).
+fixer="libmodernize.fixes.fix_dict_six"
+echo "Running python 3 compatability test $fixer"
+python-modernize -f $fixer -j4 -n -w . >/dev/null 2>/dev/null
+if git diff | grep "^+ " | grep -v '[ ]*for' | grep -v [.]join | grep -v from_iterable; then
+    echo
+    echo "Error: the above are changes suggested by python-modernize "
+    echo "to handle the list=>iterator transition in Python 3."
+    echo "Because 'python-modernize -f libmodernize.fixes.fix_dict_six' is spammy "
+    echo "and also changes places where an iterator works fine, this output "
+    echo "does not display the full context; you can find the diff with context by "
+    echo "searching through the (unfortunately very spammy) full output below:"
+    echo
+    # Clear the output
+    git diff
+    echo
+    echo "That was a lot of text!  Read this output from the top for more readable details."
+    git reset --hard >/dev/null
+    failed=1
+fi
+
+if git grep -q '\(^\W*import StringIO\|^\W*from StringIO\)'; then
+    echo "ERROR: StringIO imports not compatible with python 2+3:"
+    git grep '\(^\W*import StringIO\|^\W*from StringIO\)'
+    echo "Please use 'from six.moves import cStringIO as StringIO'"
+    failed=1
+fi
+
+echo
+if [ -z "$failed" ]; then
+    echo "No issues detected!"
+else
+    echo "Python 3 compatibility error(s) detected!  See diffs above for what you need to change."
+fi

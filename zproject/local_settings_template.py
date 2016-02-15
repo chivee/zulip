@@ -82,7 +82,7 @@ NOREPLY_EMAIL_ADDRESS = "noreply@example.com"
 # domains/IP addresses for your site. This is a security measure to
 # prevent an attacker from poisoning caches and triggering password
 # reset emails with links to malicious hosts by submitting requests
-# with a fake HTTP Host header.
+# with a fake HTTP Host header. You must include 'localhost' here.
 ALLOWED_HOSTS = ['*']
 
 ### OPTIONAL SETTINGS
@@ -114,12 +114,27 @@ INLINE_IMAGE_PREVIEW = True
 
 # By default, files uploaded by users and user avatars are stored
 # directly on the Zulip server.  If file storage in Amazon S3 is
-# desired, you can configure that by setting s3_key and s3_secret_key
-# in /etc/zulip/zulip-secrets.conf to be the S3 access and secret keys
-# that you want to use, and setting the S3_AUTH_UPLOADS_BUCKET and
-# S3_AVATAR_BUCKET to be the S3 buckets you've created to store file
-# uploads and user avatars, respectively.
+# desired, you can configure that as follows:
+#
+# (1) Set s3_key and s3_secret_key in /etc/zulip/zulip-secrets.conf to
+# be the S3 access and secret keys that you want to use, and setting
+# the S3_AUTH_UPLOADS_BUCKET and S3_AVATAR_BUCKET to be the S3 buckets
+# you've created to store file uploads and user avatars, respectively.
+# Then restart Zulip (scripts/restart-zulip).
+#
+# (2) Edit /etc/nginx/sites-available/zulip-enterprise to comment out
+# the nginx configuration for /user_uploads and /user_avatars (see
+# https://github.com/zulip/zulip/issues/291 for discussion of a better
+# solution that won't be automatically reverted by the Zulip upgrade
+# script), and then restart nginx.
 LOCAL_UPLOADS_DIR = "/home/zulip/uploads"
+#S3_AUTH_UPLOADS_BUCKET = ""
+#S3_AVATAR_BUCKET = ""
+
+# Maximum allowed size of uploaded files, in megabytes.  DO NOT SET
+# ABOVE 80MB.  The file upload implementation doesn't support chunked
+# uploads, so browsers will crash if you try uploading larger files.
+MAX_FILE_UPLOAD_SIZE = 25
 
 # Controls whether name changes are completely disabled for this installation
 # This is useful in settings where you're syncing names from an integrated LDAP/Active Directory
@@ -133,6 +148,19 @@ ENABLE_GRAVATAR = True
 # custom default avatar image at /home/zulip/local-static/default-avatar.png
 # and uncomment the following line.
 #DEFAULT_AVATAR_URI = '/local-static/default-avatar.png'
+
+# To access an external postgres database you should define the host name in
+# REMOTE_POSTGRES_HOST, you can define the password in the secrets file in the
+# property postgres_password, and the SSL connection mode in REMOTE_POSTGRES_SSLMODE
+# Different options are:
+#   disable: I don't care about security, and I don't want to pay the overhead of encryption.
+#   allow: I don't care about security, but I will pay the overhead of encryption if the server insists on it.
+#   prefer: I don't care about encryption, but I wish to pay the overhead of encryption if the server supports it.
+#   require: I want my data to be encrypted, and I accept the overhead. I trust that the network will make sure I always connect to the server I want.
+#   verify-ca: I want my data encrypted, and I accept the overhead. I want to be sure that I connect to a server that I trust.
+#   verify-full: I want my data encrypted, and I accept the overhead. I want to be sure that I connect to a server I trust, and that it's the one I specify.
+#REMOTE_POSTGRES_HOST = 'dbserver.example.com'
+#REMOTE_POSTGRES_SSLMODE = 'require'
 
 ### TWITTER INTEGRATION
 
@@ -177,7 +205,8 @@ EMAIL_GATEWAY_PATTERN = ""
 # to change in this file.  You will also need to enable the Zulip postfix
 # configuration to support local delivery by adding
 #   , zulip::postfix_localmail
-# to puppet_classes in /etc/zulip/zulip.conf.
+# to puppet_classes in /etc/zulip/zulip.conf and then running
+# `scripts/zulip-puppet-apply -f` to do the installation.
 #
 # If you are using polling, you will need to setup an IMAP email
 # account dedicated to Zulip email gateway messages.  The model is
@@ -189,11 +218,11 @@ EMAIL_GATEWAY_PATTERN = ""
 # which will check that inbox and batch-process any new messages.
 #
 # You will need to configure authentication for the email mirror
-# command to access the IMAP mailbox below.
+# command to access the IMAP mailbox below and in zulip-secrets.conf.
 #
-# The IMAP login and password
+# The IMAP login; username here and password as email_gateway_login in
+# zulip-secrets.conf.
 EMAIL_GATEWAY_LOGIN = ""
-EMAIL_GATEWAY_PASSWORD = ""
 # The IMAP server & port to connect to
 EMAIL_GATEWAY_IMAP_SERVER = ""
 EMAIL_GATEWAY_IMAP_PORT = 993
@@ -248,10 +277,10 @@ from django_auth_ldap.config import LDAPSearch, GroupOfNamesType
 # Zulip. Example: "ldaps://ldap.example.com"
 AUTH_LDAP_SERVER_URI = ""
 
-# This DN and password will be used to bind to your server. If unset, anonymous
-# binds are performed.
+# This DN will be used to bind to your server. If unset, anonymous
+# binds are performed.  If set, you need to specify the password as
+# 'auth_ldap_bind_password' in zulip-secrets.conf.
 AUTH_LDAP_BIND_DN = ""
-AUTH_LDAP_BIND_PASSWORD = ""
 
 # Specify the search base and the property to filter on that corresponds to the
 # username.
@@ -269,3 +298,32 @@ AUTH_LDAP_USER_ATTR_MAP = {
 }
 
 CAMO_URI = ''
+
+# RabbitMQ configuration
+#
+# By default, Zulip connects to rabbitmq running locally on the machine,
+# but Zulip also supports connecting to RabbitMQ over the network;
+# to use a remote RabbitMQ instance, set RABBITMQ_HOST here.
+# RABBITMQ_HOST = "localhost"
+# To use another rabbitmq user than the default 'zulip', set RABBITMQ_USERNAME here.
+# RABBITMQ_USERNAME = 'zulip'
+
+# Memcached configuration
+#
+# By default, Zulip connects to memcached running locally on the machine,
+# but Zulip also supports connecting to memcached over the network;
+# to use a remote Memcached instance, set MEMCACHED_LOCATION here.
+# Format HOST:PORT
+# MEMCACHED_LOCATION = 127.0.0.1:11211
+
+# Redis configuration
+#
+# By default, Zulip connects to redis running locally on the machine,
+# but Zulip also supports connecting to redis over the network;
+# to use a remote RabbitMQ instance, set REDIS_HOST here.
+# REDIS_HOST = '127.0.0.1'
+# For a different redis port set the REDIS_PORT here.
+# REDIS_PORT = 6379
+
+# Controls whether Zulip will rate-limit user requests.
+# RATE_LIMITING = True

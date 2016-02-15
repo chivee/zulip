@@ -1,4 +1,5 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 
 cd "$(dirname "$0")"/..
 
@@ -15,6 +16,7 @@ function run {
 
 run ./tools/clean-repo
 run ./tools/lint-all
+run ./tools/test-migrations
 run ./tools/test-js-with-node
 run ./tools/test-backend
 run ./tools/test-js-with-casper

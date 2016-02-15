@@ -16,8 +16,8 @@ import os
 import os.path
 import hashlib
 
-memcached_time_start = 0
-memcached_total_time = 0
+memcached_time_start = 0.0
+memcached_total_time = 0.0
 memcached_total_requests = 0
 
 def get_memcached_time():
@@ -54,7 +54,7 @@ def get_or_create_key_prefix():
         # The file already exists
         tries = 1
         while tries < 10:
-            with file(filename, 'r') as f:
+            with open(filename, 'r') as f:
                 prefix = f.readline()[:-1]
             if len(prefix) == 33:
                 break
@@ -63,7 +63,8 @@ def get_or_create_key_prefix():
             time.sleep(0.5)
 
     if not prefix:
-        sys.exit("Could not read memcache key prefix file")
+        print("Could not read memcache key prefix file")
+        sys.exit(1)
 
     return prefix
 

@@ -13,7 +13,7 @@ import datetime
 import re
 import subprocess
 import ujson
-import urllib
+from six.moves import urllib
 from collections import defaultdict
 
 def unsubscribe_token(user_profile):
@@ -35,7 +35,7 @@ def hashchange_encode(string):
     # Do the same encoding operation as hashchange.encodeHashComponent on the
     # frontend.
     # `safe` has a default value of "/", but we want those encoded, too.
-    return urllib.quote(
+    return urllib.parse.quote(
         string.encode("utf-8"), safe="").replace(".", "%2E").replace("%", ".")
 
 def pm_narrow_url(participants):
@@ -344,7 +344,7 @@ def handle_missedmessage_emails(user_profile_id, missed_email_events):
             unique_messages = {m.id: m for m in msg_list}
             do_send_missedmessage_events_reply_in_zulip(
                 user_profile,
-                unique_messages.values(),
+                list(unique_messages.values()),
                 mesage_count_by_recipient_subject[recipient_subject],
             )
     else:
@@ -356,7 +356,7 @@ def handle_missedmessage_emails(user_profile_id, missed_email_events):
         unique_messages = {m.id: m for m in all_messages}
         do_send_missedmessage_events(
             user_profile,
-            unique_messages.values(),
+            list(unique_messages.values()),
             len(messages),
         )
 

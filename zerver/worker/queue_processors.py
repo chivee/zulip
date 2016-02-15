@@ -32,7 +32,10 @@ import time
 import datetime
 import logging
 import simplejson
-import StringIO
+from six.moves import cStringIO as StringIO
+
+class WorkerDeclarationException(Exception):
+    pass
 
 def assign_queue(queue_name, enabled=True):
     def decorate(clazz):
@@ -50,11 +53,18 @@ def get_worker(queue_name):
     return worker_classes[queue_name]()
 
 def get_active_worker_queues():
-    return worker_classes.iterkeys()
+    return list(worker_classes.keys())
 
 class QueueProcessingWorker(object):
+    queue_name = None
+
     def __init__(self):
         self.q = SimpleQueueClient()
+        if self.queue_name is None:
+            raise WorkerDeclarationException("Queue worker declared without queue_name")
+
+    def consume(self, data):
+        raise WorkerDeclarationException("No consumer defined!")
 
     def consume_wrapper(self, data):
         try:
@@ -69,7 +79,7 @@ class QueueProcessingWorker(object):
             lock_fn = fn + '.lock'
             with lockfile(lock_fn):
                 with open(fn, 'a') as f:
-                    f.write(line)
+                    f.write(line.encode('utf-8'))
         reset_queries()
 
     def _log_problem(self):
@@ -255,7 +265,7 @@ class SlowQueryWorker(QueueProcessingWorker):
             return
 
         if len(slow_queries) > 0:
-            topic = "%s: slow queries" % (settings.STATSD_PREFIX,)
+            topic = "%s: slow queries" % (settings.EXTERNAL_HOST,)
 
             content = ""
             for query in slow_queries:
@@ -278,12 +288,12 @@ class MessageSenderWorker(QueueProcessingWorker):
 
         environ = {'REQUEST_METHOD': 'SOCKET',
                    'SCRIPT_NAME': '',
-                   'PATH_INFO': '/json/send_message',
+                   'PATH_INFO': '/json/messages',
                    'SERVER_NAME': 'localhost',
                    'SERVER_PORT': 9993,
                    'SERVER_PROTOCOL': 'ZULIP_SOCKET/1.0',
                    'wsgi.version': (1, 0),
-                   'wsgi.input': StringIO.StringIO(),
+                   'wsgi.input': StringIO(),
                    'wsgi.errors': sys.stderr,
                    'wsgi.multithread': False,
                    'wsgi.multiprocess': True,

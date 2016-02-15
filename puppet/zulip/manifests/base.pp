@@ -1,24 +1,34 @@
 class zulip::base {
   include apt
-  $base_packages = [ # Basic requirements for effective operation of a server
+  $base_packages = [ # Accurate time is essential
                      "ntp",
-                     # This is just good practice
-                     "molly-guard",
                      # Dependencies of our API
                      "python-requests",
                      "python-simplejson",
                      # For development/debugging convenience
                      "ipython",
-                     "screen",
-                     "strace",
-                     "vim",
-                     "moreutils",
-                     "emacs23-nox",
-                     "git",
-                     "puppet-el",
-                     "host",
                      ]
   package { $base_packages: ensure => "installed" }
+
+  $release_name = $operatingsystemrelease ? {
+    # Debian releases
+    /7.[0-9]*/ => 'wheezy',
+    /8.[0-9]*/ => 'jessie',
+    # Ubuntu releases
+    '12.04' => 'precise',
+    '14.04' => 'trusty',
+    '15.04' => 'vivid',
+    '15.10' => 'wily',
+  }
+
+  $postgres_version = $release_name ? {
+    'wheezy'  => '9.1',
+    'jessie'  => '9.4',
+    'precise' => '9.1',
+    'trusty'  => '9.3',
+    'vivid'   => '9.4',
+    'wily'    => '9.4',
+  }
 
   group { 'zulip':
     ensure     => present,

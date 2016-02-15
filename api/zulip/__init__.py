@@ -22,25 +22,25 @@
 
 from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import division
 import simplejson
 import requests
 import time
 import traceback
-import urlparse
 import sys
 import os
 import optparse
 import platform
-import urllib
 import random
 from distutils.version import LooseVersion
 
 from six.moves.configparser import SafeConfigParser
+from six.moves import urllib
 import logging
 import six
 
 
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +164,7 @@ class Client(object):
             config_file = get_default_config_filename()
         if os.path.exists(config_file):
             config = SafeConfigParser()
-            with file(config_file, 'r') as f:
+            with open(config_file, 'r') as f:
                 config.readfp(f, config_file)
             if api_key is None:
                 api_key = config.get("api", "key")
@@ -289,7 +289,7 @@ class Client(object):
                 kwargs = {kwarg: query_state["request"]}
                 res = requests.request(
                         method,
-                        urlparse.urljoin(self.base_url, url),
+                        urllib.parse.urljoin(self.base_url, url),
                         auth=requests.auth.HTTPBasicAuth(self.email,
                                                          self.api_key),
                         verify=self.tls_verification, timeout=90,
@@ -468,7 +468,7 @@ Client._register('list_subscriptions', method='GET', url='users/me/subscriptions
 Client._register('add_subscriptions', url='users/me/subscriptions', make_request=_mk_subs)
 Client._register('remove_subscriptions', method='PATCH', url='users/me/subscriptions', make_request=_mk_rm_subs)
 Client._register('get_subscribers', method='GET',
-                 computed_url=lambda request: 'streams/%s/members' % (urllib.quote(request['stream'], safe=''),),
+                 computed_url=lambda request: 'streams/%s/members' % (urllib.parse.quote(request['stream'], safe=''),),
                  make_request=_kwargs_to_dict)
 Client._register('render_message', method='GET', url='messages/render')
 Client._register('create_user', method='POST', url='users')

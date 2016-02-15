@@ -12,8 +12,11 @@ from zerver.lib.actions import (
     get_display_recipient,
 )
 
+from zerver.lib.handlers import allocate_handler_id
+
 from zerver.models import (
     get_realm,
+    get_stream,
     get_user_profile_by_email,
     resolve_email_to_domain,
     Client,
@@ -30,7 +33,7 @@ import os
 import re
 import time
 import ujson
-import urllib
+from six.moves import urllib
 
 from contextlib import contextmanager
 import six
@@ -161,6 +164,7 @@ class DummyHandler(object):
     def __init__(self, assert_callback):
         self.assert_callback = assert_callback
         self.request = DummyTornadoRequest()
+        allocate_handler_id(self)
 
     # Mocks RequestHandler.async_callback, which wraps a callback to
     # handle exceptions.  We return the callback as-is.
@@ -192,18 +196,17 @@ class POSTRequestMock(object):
         self.session = DummySession()
         self._log_data = {}
         self.META = {'PATH_INFO': 'test'}
-        self._log_data = {}
 
 class AuthedTestCase(TestCase):
     # Helper because self.client.patch annoying requires you to urlencode
     def client_patch(self, url, info={}, **kwargs):
-        info = urllib.urlencode(info)
+        info = urllib.parse.urlencode(info)
         return self.client.patch(url, info, **kwargs)
     def client_put(self, url, info={}, **kwargs):
-        info = urllib.urlencode(info)
+        info = urllib.parse.urlencode(info)
         return self.client.put(url, info, **kwargs)
     def client_delete(self, url, info={}, **kwargs):
-        info = urllib.urlencode(info)
+        info = urllib.parse.urlencode(info)
         return self.client.delete(url, info, **kwargs)
 
     def login(self, email, password=None):
@@ -326,7 +329,9 @@ class AuthedTestCase(TestCase):
     # Subscribe to a stream directly
     def subscribe_to_stream(self, email, stream_name, realm=None):
         realm = get_realm(resolve_email_to_domain(email))
-        stream, _ = create_stream_if_needed(realm, stream_name)
+        stream = get_stream(stream_name, realm)
+        if stream is None:
+            stream, _ = create_stream_if_needed(realm, stream_name)
         user_profile = get_user_profile_by_email(email)
         do_add_subscription(user_profile, stream, no_log=True)
 

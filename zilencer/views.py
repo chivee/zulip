@@ -37,7 +37,7 @@ def get_ticket_number():
         ticket_number = int(open(fn).read()) + 1
     except:
         ticket_number = 1
-    open(fn, 'w').write('%d' % ticket_number)
+    open(fn, 'w').write('%d' % (ticket_number,))
     return ticket_number
 
 @has_request_variables
@@ -84,7 +84,7 @@ def report_error(request, deployment, type=REQ, report=REQ(validator=check_dict(
         notify_server_error(report)
     else:
         return json_error("Invalid type parameter")
-    return json_response({})
+    return json_success()
 
 def realm_for_email(email):
     try:

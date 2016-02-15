@@ -124,7 +124,7 @@ class Realm(models.Model):
     notifications_stream = models.ForeignKey('Stream', related_name='+', null=True, blank=True)
     deactivated = models.BooleanField(default=False)
 
-    NOTIFICATION_STREAM_NAME = 'zulip'
+    DEFAULT_NOTIFICATION_STREAM_NAME = 'zulip'
 
     def __repr__(self):
         return (u"<Realm: %s %s>" % (self.domain, self.id)).encode("utf-8")
@@ -187,6 +187,19 @@ def resolve_email_to_domain(email):
     if alias is not None:
         domain = alias.realm.domain
     return domain
+
+# Is a user with the given email address allowed to be in the given realm?
+# (This function does not check whether the user has been invited to the realm.
+# So for invite-only realms, this is the test for whether a user can be invited,
+# not whether the user can sign up currently.)
+def email_allowed_for_realm(email, realm):
+    # Anyone can be in an open realm
+    if not realm.restricted_to_domain:
+        return True
+
+    # Otherwise, domains must match (case-insensitively)
+    email_domain = resolve_email_to_domain(email)
+    return email_domain == realm.domain.lower()
 
 def alias_for_realm(domain):
     try:
@@ -278,8 +291,8 @@ class UserProfile(AbstractBaseUser, PermissionsMixin):
     # which we don't use; email is modified to make it indexed and unique.
     email = models.EmailField(blank=False, db_index=True, unique=True)
     is_staff = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
-    is_bot = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True, db_index=True)
+    is_bot = models.BooleanField(default=False, db_index=True)
     date_joined = models.DateTimeField(default=timezone.now)
     is_mirror_dummy = models.BooleanField(default=False)
     bot_owner = models.ForeignKey('self', null=True, on_delete=models.SET_NULL)
@@ -751,7 +764,7 @@ class Message(models.Model):
 
     @staticmethod
     def need_to_render_content(rendered_content, rendered_content_version):
-        return rendered_content_version < bugdown.version or rendered_content is None
+        return rendered_content is None or rendered_content_version < bugdown.version
 
     def to_dict(self, apply_markdown):
         return extract_message_dict(self.to_dict_json(apply_markdown))

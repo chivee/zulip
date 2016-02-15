@@ -51,7 +51,7 @@ if not os.path.exists(os.path.join(os.path.dirname(__file__), ".git")):
     sys.exit(1)
 
 # TODO: Parse arguments properly
-if "--travis" in sys.argv:
+if "--travis" in sys.argv or "--docker" in sys.argv:
     ZULIP_PATH="."
 
 # tsearch-extras is an extension to postgres's built-in full-text search.
@@ -113,8 +113,9 @@ def main():
         PHANTOMJS_PATH = "/srv/phantomjs"
         PHANTOMJS_TARBALL = os.path.join(PHANTOMJS_PATH, "phantomjs-1.9.8-linux-x86_64.tar.bz2")
         sh.mkdir("-p", PHANTOMJS_PATH, **LOUD)
-        sh.wget("https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-1.9.8-linux-x86_64.tar.bz2",
-                output_document=PHANTOMJS_TARBALL, **LOUD)
+        if not os.path.exists(PHANTOMJS_TARBALL):
+            sh.wget("https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-1.9.8-linux-x86_64.tar.bz2",
+                    output_document=PHANTOMJS_TARBALL, **LOUD)
         sh.tar("xj", directory=PHANTOMJS_PATH, file=PHANTOMJS_TARBALL, **LOUD)
         sh.ln("-sf", os.path.join(PHANTOMJS_PATH, "phantomjs-1.9.8-linux-x86_64", "bin", "phantomjs"),
               "/usr/local/bin/phantomjs", **LOUD)
@@ -164,11 +165,18 @@ def main():
         os.system("sudo service rabbitmq-server restart")
         os.system("sudo service redis-server restart")
         os.system("sudo service memcached restart")
+    elif "--docker" in sys.argv:
+        os.system("sudo service rabbitmq-server restart")
+        os.system("sudo pg_dropcluster --stop 9.3 main")
+        os.system("sudo pg_createcluster -e utf8 --start 9.3 main")
+        os.system("sudo service redis-server restart")
+        os.system("sudo service memcached restart")
     sh.configure_rabbitmq(**LOUD)
     sh.postgres_init_dev_db(**LOUD)
     sh.do_destroy_rebuild_database(**LOUD)
     sh.postgres_init_test_db(**LOUD)
     sh.do_destroy_rebuild_test_database(**LOUD)
+    return 0
 
 if __name__ == "__main__":
     sys.exit(main())

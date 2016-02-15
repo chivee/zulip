@@ -7,7 +7,7 @@ from pipeline.storage import PipelineMixin
 class AddHeaderMixin(object):
     def post_process(self, paths, dry_run=False, **kwargs):
         if dry_run:
-            return
+            return []
 
         with open(settings.STATIC_HEADER_FILE) as header_file:
             header = header_file.read().decode(settings.FILE_CHARSET)
@@ -47,7 +47,7 @@ class AddHeaderMixin(object):
             if processed:
                 ret_dict[old_path] = val
 
-        return ret_dict.itervalues()
+        return list(ret_dict.values())
 
 
 class ZulipStorage(PipelineMixin, AddHeaderMixin, CachedFilesMixin,

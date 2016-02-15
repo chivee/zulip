@@ -12,11 +12,11 @@ from zerver.models import Realm, RealmEmoji, Stream, UserProfile, UserActivity, 
     MAX_MESSAGE_LENGTH, get_client, get_stream, get_recipient, get_huddle, \
     get_user_profile_by_id, PreregistrationUser, get_display_recipient, \
     to_dict_cache_key, get_realm, stringify_message_dict, bulk_get_recipients, \
-    resolve_email_to_domain, email_to_username, display_recipient_cache_key, \
-    get_stream_cache_key, to_dict_cache_key_id, \
+    email_allowed_for_realm, email_to_username, display_recipient_cache_key, \
+    get_user_profile_by_email, get_stream_cache_key, to_dict_cache_key_id, \
     UserActivityInterval, get_active_user_dicts_in_realm, get_active_streams, \
     realm_filters_for_domain, RealmFilter, receives_offline_notifications, \
-    ScheduledJob, realm_filters_for_domain, RealmFilter, get_active_bot_dicts_in_realm
+    ScheduledJob, realm_filters_for_domain, get_active_bot_dicts_in_realm
 
 from zerver.lib.avatar import get_avatar_url, avatar_url
 from guardian.shortcuts import assign_perm, remove_perm
@@ -47,8 +47,7 @@ from zerver.lib import bugdown
 from zerver.lib.cache import cache_with_key, cache_set, \
     user_profile_by_email_cache_key, cache_set_many, \
     cache_delete, cache_delete_many, message_cache_key
-from zerver.decorator import get_user_profile_by_email, JsonableError, \
-     statsd_increment
+from zerver.decorator import JsonableError, statsd_increment
 from zerver.lib.event_queue import request_event_queue, get_user_events, send_event
 from zerver.lib.utils import log_statsd_event, statsd
 from zerver.lib.html_diff import highlight_html_differences
@@ -112,8 +111,7 @@ def bot_owner_userids(user_profile):
         return active_user_ids(user_profile.realm)
 
 def realm_user_count(realm):
-    user_dicts = get_active_user_dicts_in_realm(realm)
-    return len([user_dict for user_dict in user_dicts if not user_dict["is_bot"]])
+    return UserProfile.objects.filter(realm=realm, is_active=True, is_bot=False).count()
 
 def send_signup_message(sender, signups_stream, user_profile,
                         internal=False, realm=None):
@@ -799,6 +797,13 @@ def send_pm_if_empty_stream(sender, stream, stream_name):
         return
 
     if sender.is_bot and sender.bot_owner is not None:
+        # Don't send these notifications for cross-realm bot messages
+        # (e.g. from EMAIL_GATEWAY_BOT) since the owner for
+        # EMAIL_GATEWAY_BOT is probably the server administrator, not
+        # the owner of the bot who could potentially fix the problem.
+        if stream.realm != sender.realm:
+            return
+
         if stream:
             num_subscribers = stream.num_subscribers()
 
@@ -1129,7 +1134,7 @@ def notify_subscriptions_added(user_profile, sub_pairs, stream_emails, no_log=Fa
         log_event({'type': 'subscription_added',
                    'user': user_profile.email,
                    'names': [stream.name for sub, stream in sub_pairs],
-                   'domain': stream.realm.domain})
+                   'domain': user_profile.realm.domain})
 
     # Send a notification to the user who subscribed.
     payload = [dict(name=stream.name,
@@ -1299,7 +1304,7 @@ def notify_subscriptions_removed(user_profile, streams, no_log=False):
         log_event({'type': 'subscription_removed',
                    'user': user_profile.email,
                    'names': [stream.name for stream in streams],
-                   'domain': stream.realm.domain})
+                   'domain': user_profile.realm.domain})
 
     payload = [dict(name=stream.name, stream_id=stream.id) for stream in streams]
     event = dict(type="subscription", op="remove",
@@ -1333,7 +1338,7 @@ def bulk_remove_subscriptions(users, streams):
 
     subs_by_user = dict((user_profile.id, []) for user_profile in users)
     for sub in Subscription.objects.select_related("user_profile").filter(user_profile__in=users,
-                                                                          recipient__in=recipients_map.values(),
+                                                                          recipient__in=list(recipients_map.values()),
                                                                           active=True):
         subs_by_user[sub.user_profile_id].append(sub)
 
@@ -1705,7 +1710,7 @@ def do_create_realm(domain, name, restricted_to_domain=True):
         realm.save()
 
         # Create stream once Realm object has been saved
-        notifications_stream, _ = create_stream_if_needed(realm, Realm.NOTIFICATION_STREAM_NAME)
+        notifications_stream, _ = create_stream_if_needed(realm, Realm.DEFAULT_NOTIFICATION_STREAM_NAME)
         realm.notifications_stream = notifications_stream
         realm.save(update_fields=['notifications_stream'])
 
@@ -1861,9 +1866,9 @@ def set_default_streams(realm, stream_names):
         stream, _ = create_stream_if_needed(realm, stream_name)
         DefaultStream.objects.create(stream=stream, realm=realm)
 
-    # All realms get a notifications stream by default
-    notifications_stream, _ = create_stream_if_needed(realm, Realm.NOTIFICATION_STREAM_NAME)
-    DefaultStream.objects.create(stream=notifications_stream, realm=realm)
+    # Always include the realm's default notifications streams, if it exists
+    if realm.notifications_stream is not None:
+        DefaultStream.objects.get_or_create(stream=realm.notifications_stream, realm=realm)
 
     log_event({'type': 'default_streams',
                'domain': realm.domain,
@@ -1872,12 +1877,15 @@ def set_default_streams(realm, stream_names):
 def do_add_default_stream(realm, stream_name):
     stream, _ = create_stream_if_needed(realm, stream_name)
     if DefaultStream.objects.filter(realm=realm, stream=stream).exists():
-        return
+        return {}
     DefaultStream.objects.create(realm=realm, stream=stream)
     return {}
 
 def do_remove_default_stream(realm, stream_name):
-    DefaultStream.objects.filter(realm=realm, stream__name=stream_name).delete()
+    stream = get_stream(stream_name, realm)
+    if stream is None:
+        raise JsonableError("Stream does not exist")
+    DefaultStream.objects.filter(realm=realm, stream=stream).delete()
     return {}
 
 def get_default_streams_for_realm(realm):
@@ -2389,7 +2397,9 @@ def gather_subscriptions_helper(user_profile):
                 for subscriber in sub['subscribers']:
                     user_ids.add(subscriber)
     email_dict = get_emails_from_user_ids(list(user_ids))
-    return (sorted(subscribed), sorted(unsubscribed), email_dict)
+    return (sorted(subscribed, key=lambda x: x['name']),
+            sorted(unsubscribed, key=lambda x: x['name']),
+            email_dict)
 
 def gather_subscriptions(user_profile):
     subscribed, unsubscribed, email_dict = gather_subscriptions_helper(user_profile)
@@ -2756,17 +2766,17 @@ def handle_push_notification(user_profile_id, missed_message):
     except UserMessage.DoesNotExist:
         logging.error("Could not find UserMessage with message_id %s" %(missed_message['message_id'],))
 
-def is_inactive(value):
+def is_inactive(email):
     try:
-        if get_user_profile_by_email(value).is_active:
-            raise ValidationError(u'%s is already active' % value)
+        if get_user_profile_by_email(email).is_active:
+            raise ValidationError(u'%s is already active' % (email,))
     except UserProfile.DoesNotExist:
         pass
 
-def user_email_is_unique(value):
+def user_email_is_unique(email):
     try:
-        get_user_profile_by_email(value)
-        raise ValidationError(u'%s is already registered' % value)
+        get_user_profile_by_email(email)
+        raise ValidationError(u'%s is already registered' % (email,))
     except UserProfile.DoesNotExist:
         pass
 
@@ -2788,7 +2798,7 @@ def do_invite_users(user_profile, invitee_emails, streams):
             errors.append((email, "Invalid address."))
             continue
 
-        if user_profile.realm.restricted_to_domain and resolve_email_to_domain(email) != user_profile.realm.domain.lower():
+        if not email_allowed_for_realm(email, user_profile.realm):
             errors.append((email, "Outside your domain."))
             continue
 

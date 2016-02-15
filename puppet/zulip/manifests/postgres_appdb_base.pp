@@ -1,11 +1,12 @@
-class zulip::postgres_appdb {
+# Minimal shared configuration needed to run a Zulip postgres database.
+class zulip::postgres_appdb_base {
   include zulip::postgres_common
   include zulip::supervisor
 
   $appdb_packages = [# Needed to run process_fts_updates
                      "python-psycopg2",
                      # Needed for our full text search system
-                     "postgresql-9.3-tsearch-extras",
+                     "postgresql-${zulip::base::postgres_version}-tsearch-extras",
                      ]
   define safepackage ( $ensure = present ) {
     if !defined(Package[$title]) {
@@ -37,16 +38,18 @@ class zulip::postgres_appdb {
     notify => Service[supervisor],
   }
 
-  file { '/usr/share/postgresql/9.3/tsearch_data/en_us.dict':
+  file { "/usr/share/postgresql/${zulip::base::postgres_version}/tsearch_data/en_us.dict":
+    require => Package["postgresql-${zulip::base::postgres_version}"],
     ensure => 'link',
     target => '/var/cache/postgresql/dicts/en_us.dict',
   }
-  file { '/usr/share/postgresql/9.3/tsearch_data/en_us.affix':
+  file { "/usr/share/postgresql/${zulip::base::postgres_version}/tsearch_data/en_us.affix":
+    require => Package["postgresql-${zulip::base::postgres_version}"],
     ensure => 'link',
     target => '/var/cache/postgresql/dicts/en_us.affix',
   }
-  file { "/usr/share/postgresql/9.3/tsearch_data/zulip_english.stop":
-    require => Package["postgresql-9.3"],
+  file { "/usr/share/postgresql/${zulip::base::postgres_version}/tsearch_data/zulip_english.stop":
+    require => Package["postgresql-${zulip::base::postgres_version}"],
     ensure => file,
     owner => "root",
     group => "root",

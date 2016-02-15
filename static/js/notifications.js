@@ -135,7 +135,7 @@ if (window.bridge !== undefined) {
     window.bridge.updateCount(0);
 }
 
-var new_message_count;
+var new_message_count = 0;
 
 exports.update_title_count = function (count) {
     new_message_count = count;
@@ -147,7 +147,9 @@ exports.redraw_title = function () {
     var n;
 
     var new_title = (new_message_count ? ("(" + new_message_count + ") ") : "")
-        + page_params.realm_name + " - " + page_params.product_name;
+        + narrow.narrow_title + " - "
+        + page_params.realm_name + " - "
+        + page_params.product_name;
 
     if (document.title === new_title) {
         return;
