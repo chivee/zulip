@@ -342,14 +342,14 @@ exports.update_messages = function update_messages(events) {
     if (topic_edited) {
         if (!changed_narrow) {
             home_msg_list.rerender();
-            if (current_msg_list === narrowed_msg_list) {
-                narrowed_msg_list.rerender();
+            if (current_msg_list === message_list.narrowed) {
+                message_list.narrowed.rerender();
             }
         }
     } else {
         home_msg_list.view.rerender_messages(msgs_to_rerender);
-        if (current_msg_list === narrowed_msg_list) {
-            narrowed_msg_list.view.rerender_messages(msgs_to_rerender);
+        if (current_msg_list === message_list.narrowed) {
+            message_list.narrowed.view.rerender_messages(msgs_to_rerender);
         }
     }
     unread.update_unread_counts();
@@ -363,15 +363,15 @@ exports.insert_new_messages = function insert_new_messages(messages) {
     // You must add add messages to home_msg_list BEFORE
     // calling unread.process_loaded_messages.
     exports.add_messages(messages, home_msg_list, {messages_are_new: true});
-    exports.add_messages(messages, all_msg_list, {messages_are_new: true});
+    exports.add_messages(messages, message_list.all, {messages_are_new: true});
 
     if (narrow.active()) {
         if (narrow.filter().can_apply_locally()) {
-            exports.add_messages(messages, narrowed_msg_list, {messages_are_new: true});
+            exports.add_messages(messages, message_list.narrowed, {messages_are_new: true});
             notifications.possibly_notify_new_messages_outside_viewport(messages);
         } else {
             // if we cannot apply locally, we have to wait for this callback to happen to notify
-            maybe_add_narrowed_messages(messages, narrowed_msg_list, true);
+            maybe_add_narrowed_messages(messages, message_list.narrowed, true);
         }
     } else {
         notifications.possibly_notify_new_messages_outside_viewport(messages);
@@ -411,8 +411,8 @@ exports.insert_new_messages = function insert_new_messages(messages) {
 function process_result(messages, opts) {
     $('#get_old_messages_error').hide();
 
-    if ((messages.length === 0) && (current_msg_list === narrowed_msg_list) &&
-        narrowed_msg_list.empty()) {
+    if ((messages.length === 0) && (current_msg_list === message_list.narrowed) &&
+        message_list.narrowed.empty()) {
         // Even after trying to load more messages, we have no
         // messages to display in this narrow.
         narrow.show_empty_narrow_message();
@@ -421,11 +421,11 @@ function process_result(messages, opts) {
     messages = _.map(messages, add_message_metadata);
 
     // If we're loading more messages into the home view, save them to
-    // the all_msg_list as well, as the home_msg_list is reconstructed
-    // from all_msg_list.
+    // the message_list.all as well, as the home_msg_list is reconstructed
+    // from message_list.all.
     if (opts.msg_list === home_msg_list) {
         process_loaded_for_unread(messages);
-        exports.add_messages(messages, all_msg_list, {messages_are_new: false});
+        exports.add_messages(messages, message_list.all, {messages_are_new: false});
     }
 
     if (messages.length !== 0 && !opts.cont_will_add_messages) {
@@ -489,8 +489,8 @@ exports.load_old_messages = function load_old_messages(opts) {
         data.use_first_unread_anchor = true;
     }
 
-    channel.post({
-        url:      '/json/get_old_messages',
+    channel.get({
+        url:      '/json/messages',
         data:     data,
         idempotent: true,
         success: function (data) {
@@ -523,7 +523,7 @@ exports.load_old_messages = function load_old_messages(opts) {
 
 exports.reset_load_more_status = function reset_load_more_status() {
     load_more_enabled = true;
-    have_scrolled_away_from_top = true;
+    ui.have_scrolled_away_from_top = true;
     ui.hide_loading_more_messages_indicator();
 };
 
@@ -594,7 +594,7 @@ util.execute_early(function () {
         var backfill_batch_size = 1000;
         $(document).idle({'idle': 1000*10,
                           'onIdle': function () {
-                              var first_id = all_msg_list.first().id;
+                              var first_id = message_list.all.first().id;
                               exports.load_old_messages({
                                   anchor: first_id,
                                   num_before: backfill_batch_size,
@@ -618,8 +618,8 @@ util.execute_early(function () {
 
     $(document).on('message_id_changed', function (event) {
         var old_id = event.old_id, new_id = event.new_id;
-        if (furthest_read === old_id) {
-            furthest_read = new_id;
+        if (pointer.furthest_read === old_id) {
+            pointer.furthest_read = new_id;
         }
         if (stored_messages[old_id]) {
             stored_messages[new_id] = stored_messages[old_id];
@@ -632,7 +632,7 @@ util.execute_early(function () {
         // created, but due to the closure, the old list is not garbage collected. This also leads
         // to the old list receiving the change id events, and throwing errors as it does not
         // have the messages that you would expect in its internal data structures.
-        _.each([all_msg_list, home_msg_list, narrowed_msg_list], function (msg_list) {
+        _.each([message_list.all, home_msg_list, message_list.narrowed], function (msg_list) {
             if (msg_list !== undefined) {
                 msg_list.change_message_id(old_id, new_id);
 

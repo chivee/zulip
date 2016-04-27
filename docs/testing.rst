@@ -15,7 +15,7 @@ Schema and initial data changes
 -------------------------------
 
 If you change the database schema or change the initial test data, you
-have have to regenerate the pristine test database by running
+have to regenerate the pristine test database by running
 ``tools/do-destroy-rebuild-test-database``.
 
 Wiping the test databases
@@ -53,8 +53,8 @@ it. On Ubuntu:
 Backend Django tests
 --------------------
 
-These live in ``zerver/tests.py`` and ``zerver/test_*.py``. Run them
-with ``tools/test-backend``.
+These live in ``zerver/tests/tests.py`` and
+``zerver/tests/test_*.py``. Run them with ``tools/test-backend``.
 
 Web frontend black-box casperjs tests
 -------------------------------------
@@ -117,7 +117,7 @@ below:
   collect a series of steps (each being a ``casper.then`` or
   ``casper.wait...`` call).  Then, usually at the end of the test
   file, you'll have a ``casper.run`` call which actually runs that
-  series of steps.  This means that if you If you write code in your
+  series of steps.  This means that if you write code in your
   test file outside a ``casper.then`` or ``casper.wait...`` method, it
   will actually run before all the Casper test steps that are declared
   in the file, which can lead to confusing failures where the new code
@@ -321,3 +321,47 @@ Setting up the manual testing database
 
 Will populate your local database with all the usual accounts plus some
 test messages involving Shakespeare characters.
+
+(This is run automatically as part of the development environment setup
+process.)
+
+Javascript manual testing
+-------------------------
+
+`debug.js` has some tools for profiling Javascript code, including:
+
+- `print_elapsed_time`: Wrap a function with it to print the time that
+  function takes to the javascript console.
+- `IterationProfiler`: Profile part of looping constructs (like a for
+  loop or $.each). You mark sections of the iteration body and the
+  IterationProfiler will sum the costs of those sections over all
+  iterations.
+
+Chrome has a very good debugger and inspector in its developer tools.
+Firebug for Firefox is also pretty good. They both have profilers, but
+Chrome's is a sampling profiler while Firebug's is an instrumenting
+profiler. Using them both can be helpful because they provide
+different information.
+
+Python 3 Compatibility
+======================
+
+Zulip is working on supporting Python 3, and all new code in Zulip
+should be Python 2+3 compatible.  We have converted most of the
+codebase to be compatible with Python 3 using a suite of 2to3
+conversion tools and some manual work.  In order to avoid regressions
+in that compatibility as we continue to develop new features in zulip,
+we have a special tool, `tools/check-py3`, which checks all code for
+Python 3 syntactic compatibility by running a subset of the automated
+migration tools and checking and checking if they trigger any changes.
+`tools/check-py3` is run automatically in Zulip's Travis CI tests to
+avoid any regressions, but is not included in `test-all` since it is
+quite slow.
+
+To run `tooks/check-py3`, you need to install the `modernize` and
+`futurize` python packages (which are in the development environment's
+`requirements.txt` file).
+
+To run `check-py3` on just the python files in a particular directory,
+you can change the current working directory (e.g. `cd zerver/`) and
+run `check-py3` from there.

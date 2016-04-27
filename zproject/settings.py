@@ -15,6 +15,7 @@ import sys
 import six.moves.configparser
 
 from zerver.lib.db import TimeTrackingConnection
+import six
 
 ########################################################################
 # INITIAL SETTINGS
@@ -82,6 +83,7 @@ else:
     # For the Dev VM environment, we use the same settings as the
     # sample local_settings.py file, with a few exceptions.
     from .local_settings_template import *
+    LOCAL_UPLOADS_DIR = 'uploads'
     EXTERNAL_HOST = 'localhost:9991'
     ALLOWED_HOSTS = ['localhost']
     AUTHENTICATION_BACKENDS = ('zproject.backends.DevAuthBackend',)
@@ -142,7 +144,6 @@ DEFAULT_SETTINGS = {'TWITTER_CONSUMER_KEY': '',
                     'INITIAL_PASSWORD_SALT': None,
                     'FEEDBACK_BOT': 'feedback@zulip.com',
                     'FEEDBACK_BOT_NAME': 'Zulip Feedback Bot',
-                    'API_SUPER_USERS': set(),
                     'ADMINS': '',
                     'INLINE_IMAGE_PREVIEW': True,
                     'CAMO_URI': '',
@@ -161,7 +162,7 @@ DEFAULT_SETTINGS = {'TWITTER_CONSUMER_KEY': '',
                     'DBX_APNS_CERT_FILE': None,
                     }
 
-for setting_name, setting_val in DEFAULT_SETTINGS.iteritems():
+for setting_name, setting_val in six.iteritems(DEFAULT_SETTINGS):
     if not setting_name in vars():
         vars()[setting_name] = setting_val
 
@@ -460,12 +461,10 @@ INTERNAL_BOT_DOMAIN = "zulip.com"
 
 # Set the realm-specific bot names
 for bot in INTERNAL_BOTS:
-    if not bot['var_name'] in vars():
+    if vars().get(bot['var_name']) is None:
         bot_email = bot['email_template'] % (INTERNAL_BOT_DOMAIN,)
         vars()[bot['var_name'] ] = bot_email
 
-if EMAIL_GATEWAY_BOT not in API_SUPER_USERS:
-    API_SUPER_USERS.add(EMAIL_GATEWAY_BOT)
 if EMAIL_GATEWAY_PATTERN != "":
     EMAIL_GATEWAY_EXAMPLE = EMAIL_GATEWAY_PATTERN % ("support+abcdefg",)
 
@@ -678,6 +677,7 @@ JS_SPECS = {
             'js/resize.js',
             'js/floating_recipient_bar.js',
             'js/ui.js',
+            'js/pointer.js',
             'js/click_handlers.js',
             'js/scroll_bar.js',
             'js/gear_menu.js',
@@ -810,7 +810,7 @@ LOGGING = {
     'handlers': {
         'zulip_admins': {
             'level':     'ERROR',
-            'class':     'zerver.handlers.AdminZulipHandler',
+            'class':     'zerver.logging_handlers.AdminZulipHandler',
             # For testing the handler delete the next line
             'filters':   ['ZulipLimiter', 'require_debug_false', 'require_really_deployed'],
             'formatter': 'default'
@@ -913,7 +913,6 @@ if (len(AUTHENTICATION_BACKENDS) == 1 and
 else:
     HOME_NOT_LOGGED_IN = '/login'
     ONLY_SSO = False
-AUTHENTICATION_BACKENDS += ('guardian.backends.ObjectPermissionBackend',)
 AUTHENTICATION_BACKENDS += ('zproject.backends.ZulipDummyBackend',)
 
 POPULATE_PROFILE_VIA_LDAP = bool(AUTH_LDAP_SERVER_URI)

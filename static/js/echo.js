@@ -1,3 +1,6 @@
+// This contains zulip's frontend markdown implementation; see
+// docs/markdown.md for docs on our Markdown syntax.
+
 var echo = (function () {
 
 var exports = {};
@@ -115,8 +118,8 @@ exports._add_message_flags = add_message_flags;
 function get_next_local_id() {
     var local_id_increment = 0.01;
     var latest = page_params.max_message_id;
-    if (typeof all_msg_list !== 'undefined' && all_msg_list.last() !== undefined) {
-        latest = all_msg_list.last().id;
+    if (typeof message_list.all !== 'undefined' && message_list.all.last() !== undefined) {
+        latest = message_list.all.last().id;
     }
     latest = Math.max(0, latest);
     return truncate_precision(latest + local_id_increment);
@@ -192,8 +195,8 @@ exports.edit_locally = function edit_locally(message, raw_content, new_topic) {
     // We don't handle unread counts since local messages must be sent by us
 
     home_msg_list.view.rerender_messages([message]);
-    if (current_msg_list === narrowed_msg_list) {
-        narrowed_msg_list.view.rerender_messages([message]);
+    if (current_msg_list === message_list.narrowed) {
+        message_list.narrowed.view.rerender_messages([message]);
     }
     stream_list.update_streams_sidebar();
     stream_list.update_private_messages();
@@ -259,8 +262,8 @@ exports.process_from_server = function process_from_server(messages) {
 
     if (updated) {
         home_msg_list.view.rerender_messages(msgs_to_rerender);
-        if (current_msg_list === narrowed_msg_list) {
-            narrowed_msg_list.view.rerender_messages(msgs_to_rerender);
+        if (current_msg_list === message_list.narrowed) {
+            message_list.narrowed.view.rerender_messages(msgs_to_rerender);
         }
     } else {
         _.each(locally_processed_ids, function (id) {
@@ -278,7 +281,7 @@ exports.message_send_error = function message_send_error(local_id, error_respons
 
 function abort_message(message) {
     // Remove in all lists in which it exists
-    _.each([all_msg_list, home_msg_list, current_msg_list], function (msg_list) {
+    _.each([message_list.all, home_msg_list, current_msg_list], function (msg_list) {
         msg_list.remove_and_rerender([message]);
     });
 }

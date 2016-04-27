@@ -5,6 +5,7 @@ import errno
 import os
 import pwd
 import shutil
+import subprocess
 import sys
 import time
 
@@ -37,7 +38,7 @@ def mkdir_p(path):
     # Python doesn't have an analog to `mkdir -p` < Python 3.2.
     try:
         os.makedirs(path)
-    except OSError, e:
+    except OSError as e:
         if e.errno == errno.EEXIST and os.path.isdir(path):
             pass
         else:
@@ -67,3 +68,12 @@ def get_deployment_lock(error_rerun_script):
 
 def release_deployment_lock():
     shutil.rmtree(LOCK_DIR)
+
+def run(args):
+    # Output what we're doing in the `set -x` style
+    print("+ %s" % (" ".join(args)))
+    process = subprocess.Popen(args)
+    rc = process.wait()
+    if rc:
+        raise subprocess.CalledProcessError(rc, args)
+    return 0

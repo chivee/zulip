@@ -72,8 +72,9 @@ function query_matches_person(query, person) {
 
 }
 
+// Case-insensitive
 function query_matches_emoji(query, emoji) {
-    return (emoji.emoji_name.indexOf(query.toLowerCase()) !== -1);
+    return (emoji.emoji_name.toLowerCase().indexOf(query.toLowerCase()) !== -1);
 }
 
 // nextFocus is set on a keydown event to indicate where we should focus on keyup.
@@ -339,7 +340,7 @@ exports.initialize = function () {
         $("#new_message_content").focus();
 
         return channel.post({
-            url: '/json/change_enter_sends',
+            url: '/json/users/me/enter-sends',
             idempotent: true,
             data: {'enter_sends': page_params.enter_sends}
         });

@@ -22,7 +22,7 @@ from zerver.lib.debug import interactive_debug_listen
 from zerver.lib.response import json_response
 from zerver.lib.event_queue import process_notification, missedmessage_hook
 from zerver.lib.event_queue import setup_event_queue, add_client_gc_hook, \
-    get_descriptor_by_handler_id
+    get_descriptor_by_handler_id, clear_handler_by_id
 from zerver.lib.handlers import allocate_handler_id
 from zerver.lib.queue import setup_tornado_rabbitmq
 from zerver.lib.socket import get_sockjs_router, respond_send_message
@@ -143,15 +143,19 @@ class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
 
         # Set up middleware if needed. We couldn't do this earlier, because
         # settings weren't available.
-        self._request_middleware = None
+        self._request_middleware = None # type: ignore # Should be List[Callable[[WSGIRequest], Any]] https://github.com/JukkaL/mypy/issues/1174
         self.initLock.acquire()
         # Check that middleware is still uninitialised.
         if self._request_middleware is None:
             self.load_middleware()
         self.initLock.release()
         self._auto_finish = False
-        self.client_descriptor = None
+        # Handler IDs are allocated here, and the handler ID map must
+        # be cleared when the handler finishes its response
         allocate_handler_id(self)
+
+    def __repr__(self):
+        return "AsyncDjangoHandler<%s, %s>" % (self.handler_id, get_descriptor_by_handler_id(self.handler_id))
 
     def get(self, *args, **kwargs):
         environ  = WSGIContainer.environ(self.request)
@@ -174,7 +178,7 @@ class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
             self.set_header(h[0], h[1])
 
         if not hasattr(self, "_new_cookies"):
-            self._new_cookies = []
+            self._new_cookies = [] # type: List[http.cookie.SimpleCookie]
         self._new_cookies.append(response.cookies)
 
         self.write(response.content)
@@ -242,7 +246,9 @@ class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
                         if response is RespondAsynchronously:
                             async_request_stop(request)
                             return None
+                        clear_handler_by_id(self.handler_id)
                     except Exception as e:
+                        clear_handler_by_id(self.handler_id)
                         # If the view raised an exception, run it through exception
                         # middleware, and if the exception middleware returns a
                         # response, use that. Otherwise, reraise the exception.

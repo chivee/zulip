@@ -2,8 +2,12 @@ from __future__ import absolute_import
 
 from django.conf import settings
 from django.template.defaultfilters import slugify
+from django.utils.encoding import force_text
+from django.utils.safestring import mark_safe
+import unicodedata
 
 from zerver.lib.avatar import user_avatar_hash
+from zerver.decorator import JsonableError
 
 from boto.s3.key import Key
 from boto.s3.connection import S3Connection
@@ -13,6 +17,7 @@ from zerver.models import get_user_profile_by_id
 
 import base64
 import os
+import re
 from PIL import Image, ImageOps
 from six.moves import cStringIO as StringIO
 import random
@@ -28,23 +33,40 @@ import random
 # This is great, because passing the pseudofile object that Django gives
 # you to boto would be a pain.
 
-# To come up with a s3 key we randomly generate a "directory". The "file
-# name" is the original filename provided by the user run through Django's
-# slugify.
+# To come up with a s3 key we randomly generate a "directory". The
+# "file name" is the original filename provided by the user run
+# through a sanitization function.
 
-def sanitize_name(name):
-    split_name = name.split('.')
-    base = ".".join(split_name[:-1])
-    extension = split_name[-1]
-    return slugify(base) + "." + slugify(extension)
+def sanitize_name(value):
+    """
+    Sanitizes a value to be safe to store in a Linux filesystem, in
+    S3, and in a URL.  So unicode is allowed, but not special
+    characters other than ".", "-", and "_".
+
+    This implementation is based on django.utils.text.slugify; it is
+    modified by:
+    * hardcoding allow_unicode=True.
+    * adding '.' and '_' to the list of allowed characters.
+    * preserving the case of the value.
+    """
+    value = force_text(value)
+    value = unicodedata.normalize('NFKC', value)
+    value = re.sub('[^\w\s._-]', '', value, flags=re.U).strip()
+    return mark_safe(re.sub('[-\s]+', '-', value, flags=re.U))
 
 def random_name(bytes=60):
     return base64.urlsafe_b64encode(os.urandom(bytes))
 
+class BadImageError(JsonableError):
+    pass
+
 def resize_avatar(image_data):
     AVATAR_SIZE = 100
-    im = Image.open(StringIO(image_data))
-    im = ImageOps.fit(im, (AVATAR_SIZE, AVATAR_SIZE), Image.ANTIALIAS)
+    try:
+        im = Image.open(StringIO(image_data))
+        im = ImageOps.fit(im, (AVATAR_SIZE, AVATAR_SIZE), Image.ANTIALIAS)
+    except IOError:
+        raise BadImageError("Could not decode avatar image; did you upload an image file?")
     out = StringIO()
     im.save(out, format='png')
     return out.getvalue()

@@ -1,5 +1,9 @@
 from __future__ import absolute_import
+# Zulip's main markdown implementation.  See docs/markdown.md for
+# detailed documentation on our markdown syntax.
+from typing import Any
 
+import codecs
 import markdown
 import logging
 import traceback
@@ -242,9 +246,11 @@ class InlineHttpsProcessor(markdown.treeprocessors.Treeprocessor):
             if not url.startswith("http://"):
                 # Don't rewrite images on our own site (e.g. emoji).
                 continue
-            digest = hmac.new(settings.CAMO_KEY, url, hashlib.sha1).hexdigest()
-            encoded_url = url.encode("hex")
-            img.set("src", "%s%s/%s" % (settings.CAMO_URI, digest, encoded_url))
+            encoded_url = url.encode("utf-8")
+            encoded_camo_key = settings.CAMO_KEY.encode("utf-8")
+            digest = hmac.new(encoded_camo_key, encoded_url, hashlib.sha1).hexdigest()
+            hex_encoded_url = codecs.encode(encoded_url, "hex")
+            img.set("src", "%s%s/%s" % (settings.CAMO_URI, digest, hex_encoded_url.decode("utf-8")))
 
 class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
     TWITTER_MAX_IMAGE_HEIGHT = 400
@@ -556,7 +562,7 @@ class Emoji(markdown.inlinepatterns.Pattern):
         orig_syntax = match.group("syntax")
         name = orig_syntax[1:-1]
 
-        realm_emoji = {}
+        realm_emoji = {} # type: Dict[str, str]
         if db_data is not None:
             realm_emoji = db_data['emoji']
 
@@ -832,7 +838,7 @@ class AlertWordsNotificationProcessor(markdown.preprocessors.Preprocessor):
             allowed_before_punctuation = "|".join([r'\s', '^', r'[\(\".,\';\[\*`>]'])
             allowed_after_punctuation = "|".join([r'\s', '$', r'[\)\"\?:.,\';\]!\*`]'])
 
-            for user_id, words in realm_words.iteritems():
+            for user_id, words in six.iteritems(realm_words):
                 for word in words:
                     escaped = re.escape(word.lower())
                     match_re = re.compile(r'(?:%s)%s(?:%s)' %
@@ -987,7 +993,7 @@ def make_md_engine(key, opts):
 
 def subject_links(domain, subject):
     from zerver.models import get_realm, RealmFilter, realm_filters_for_domain
-    matches = []
+    matches = [] # type: List[str]
 
     try:
         realm_filters = realm_filters_for_domain(domain)
@@ -1018,7 +1024,7 @@ def maybe_update_realm_filters(domain):
     if domain is None:
         all_filters = all_realm_filters()
         all_filters['default'] = []
-        for domain, filters in all_filters.iteritems():
+        for domain, filters in six.iteritems(all_filters):
             make_realm_filters(domain, filters)
         # Hack to ensure that getConfig("realm") is right for mirrored Zephyrs
         make_realm_filters("mit.edu/zephyr_mirror", [])
@@ -1043,12 +1049,12 @@ def _sanitize_for_log(md):
 
 # Filters such as UserMentionPattern need a message, but python-markdown
 # provides no way to pass extra params through to a pattern. Thus, a global.
-current_message = None
+current_message = None # type: Any # Should be Message but bugdown doesn't import models.py.
 
 # We avoid doing DB queries in our markdown thread to avoid the overhead of
 # opening a new DB connection. These connections tend to live longer than the
 # threads themselves, as well.
-db_data = None
+db_data = None # type: Dict[str, Any]
 
 def do_convert(md, realm_domain=None, message=None):
     """Convert Markdown to HTML, with Zulip-specific settings and hacks."""

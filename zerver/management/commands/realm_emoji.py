@@ -3,8 +3,9 @@ from __future__ import print_function
 
 from django.core.management.base import BaseCommand
 from zerver.models import Realm, get_realm
-from zerver.lib.actions import do_add_realm_emoji, do_remove_realm_emoji
+from zerver.lib.actions import check_add_realm_emoji, do_remove_realm_emoji
 import sys
+import six
 
 class Command(BaseCommand):
     help = """Manage emoji for the specified realm
@@ -33,7 +34,7 @@ Example: python2.7 manage.py realm_emoji --realm=zulip.com --op=show
     def handle(self, *args, **options):
         realm = get_realm(options["domain"])
         if options["op"] == "show":
-            for name, url in realm.get_emoji().iteritems():
+            for name, url in six.iteritems(realm.get_emoji()):
                 print(name, url)
             sys.exit(0)
 
@@ -47,7 +48,7 @@ Example: python2.7 manage.py realm_emoji --realm=zulip.com --op=show
             if img_url is None:
                 self.print_help("python2.7 manage.py", "realm_emoji")
                 sys.exit(1)
-            do_add_realm_emoji(realm, name, img_url)
+            check_add_realm_emoji(realm, name, img_url)
             sys.exit(0)
         elif options["op"] == "remove":
             do_remove_realm_emoji(realm, name)

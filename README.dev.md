@@ -25,23 +25,23 @@ such as Mac via Virtualbox (but everything will be 2-3x slower).
   sudo apt-get install vagrant lxc lxc-templates cgroup-lite redir
   vagrant plugin install vagrant-lxc
   ```
+  You may want to [configure sudo to be passwordless when using Vagrant LXC][avoiding-sudo].
 
 * If your host is Ubuntu 14.04, you will need to [download a newer
-  version of Vagrant](https://www.vagrantup.com/downloads.html), and
-  then do the following:
+  version of Vagrant][vagrant-dl], and then do the following:
   ```
   sudo apt-get install lxc lxc-templates cgroup-lite redir
   sudo dpkg -i vagrant*.deb # in directory where you downloaded vagrant
   vagrant plugin install vagrant-lxc
   ```
+  You may want to [configure sudo to be passwordless when using Vagrant LXC][avoiding-sudo].
 
 * For other Linux hosts with a kernel above 3.12, [follow the Vagrant
-  LXC installation
-  instructions](https://github.com/fgrehm/vagrant-lxc) to get Vagrant
-  with LXC for your platform.
+  LXC installation instructions][vagrant-lxc] to get Vagrant with LXC
+  for your platform.
 
-* If your host is OS X or older Linux, [download VirtualBox](https://www.virtualbox.org/wiki/Downloads),
-  [download Vagrant](https://www.vagrantup.com/downloads.html), and install them both.
+* If your host is OS X or older Linux, [download VirtualBox][vbox-dl],
+  [download Vagrant][vagrant-dl], and install them both.
 
 * If you're on OS X and have VMWare, it should be possible to patch
   Vagrantfile to use the VMWare vagrant provider which should perform
@@ -53,6 +53,11 @@ such as Mac via Virtualbox (but everything will be 2-3x slower).
   clone using `git clone https://github.com/zulip/zulip.git -c
   core.autocrlf=false` to avoid Windows line endings being added to
   files (this causes weird errors).
+
+[vagrant-dl]: https://www.vagrantup.com/downloads.html
+[vagrant-lxc]: https://github.com/fgrehm/vagrant-lxc
+[vbox-dl]: https://www.virtualbox.org/wiki/Downloads
+[avoiding-sudo]: https://github.com/fgrehm/vagrant-lxc#avoiding-sudo-passwords
 
 Once that's done, simply change to your zulip directory and run
 `vagrant up` in your terminal to install the development server.  This
@@ -74,13 +79,40 @@ source /srv/zulip-venv/bin/activate
 To get shell access to the virtual machine running the server to run
 lint, management commands, etc., use `vagrant ssh`.
 
-(A small note on tools/run-dev.py: the `--interface=''` option will make
-the development server listen on all network interfaces.  While this
-is correct for the Vagrant guest sitting behind a NAT, you probably
-don't want to use that option when using run-dev.py in other environments).
+(A small note on tools/run-dev.py: the `--interface=''` option will
+make the development server listen on all network interfaces.  While
+this is correct for the Vagrant guest sitting behind a NAT, you
+probably don't want to use that option when using run-dev.py in other
+environments).
 
-At this point you should [read about using the development environment](https://github.com/zulip/zulip/blob/master/README.dev.md#using-the-development-environment).
+At this point you should [read about using the development
+environment][using-dev].
 
+[using-dev]: #using-the-development-environment
+
+## Specifying a proxy
+
+If you need to use a proxy server to access the Internet, you will
+need to specify the proxy settings before running `Vagrant up`.
+First, install the Vagrant plugin `vagrant-proxyconf`:
+
+```
+vagrant plugin install vagrant-proxyconf.
+```
+
+Then create `~/.zulip-vagrant-config` and add the following lines to
+it (with the appropriate values in it for your proxy):
+
+```
+HTTP_PROXY http://proxy_host:port
+HTTPS_PROXY http://proxy_host:port
+NO_PROXY localhost,127.0.0.1,.example.com
+
+```
+
+Now run `vagrant up` in your terminal to install the development
+server. If you ran `vagrant up` before and failed, you'll need to run
+`vagrant destroy` first to clean up the failed installation.
 
 Using provision.py without Vagrant
 ----------------------------------
@@ -91,7 +123,6 @@ running:
 
 ```
 sudo apt-get update
-sudo apt-get install -y python-pbs
 python /srv/zulip/provision.py
 
 cd /srv/zulip
@@ -110,7 +141,7 @@ instructions should work.
 
 Install the following non-Python dependencies:
  * libffi-dev — needed for some Python extensions
- * postgresql 9.1 or later — our database (also install development headers)
+ * postgresql 9.1 or later — our database (client, server, headers)
  * nodejs 0.10 (and npm)
  * memcached (and headers)
  * rabbitmq-server
@@ -118,12 +149,16 @@ Install the following non-Python dependencies:
  * python-dev
  * redis-server — rate limiting
  * tsearch-extras — better text search
- * libfreetype6-dev - needed before you pip install Pillow to properly generate emoji PNGs
+ * libfreetype6-dev — needed before you pip install Pillow to properly generate emoji PNGs
 
 ### On Debian or Ubuntu systems:
 
 ```
-sudo apt-get install closure-compiler libfreetype6-dev libffi-dev memcached rabbitmq-server libldap2-dev redis-server postgresql-server-dev-all libmemcached-dev python-dev hunspell-en-us nodejs nodejs-legacy npm git yui-compressor puppet gettext
+sudo apt-get install closure-compiler libfreetype6-dev libffi-dev \
+    memcached rabbitmq-server libldap2-dev redis-server \
+    postgresql-server-dev-all libmemcached-dev python-dev \
+    hunspell-en-us nodejs nodejs-legacy npm git yui-compressor \
+    puppet gettext
 
 # If on 12.04 or wheezy:
 sudo apt-get install postgresql-9.1
@@ -145,21 +180,26 @@ Now continue with the "All systems" instructions below.
 
 ### On Fedora 22 (experimental):
 
-These instructions are experimental and may have bugs; patches welcome!
+These instructions are experimental and may have bugs; patches
+welcome!
 
 ```
-sudo dnf install libffi-devel memcached rabbitmq-server openldap-devel python-devel redis postgresql-server postgresql-devel postgresql libmemcached-devel freetype-devel nodejs npm yuicompressor closure-compiler gettext
+sudo dnf install libffi-devel memcached rabbitmq-server \
+    openldap-devel python-devel redis postgresql-server \
+    postgresql-devel postgresql libmemcached-devel freetype-devel \
+    nodejs npm yuicompressor closure-compiler gettext
 ```
 
 Now continue with the Common to Fedora/CentOS instructions below.
 
 ### On CentOS 7 Core (experimental):
 
-These instructions are experimental and may have bugs; patches welcome!
+These instructions are experimental and may have bugs; patches
+welcome!
 
 ```
-# Add user zulip to the system (not necessary if you configured zulip as the administrator
-# user during the install process of CentOS 7).
+# Add user zulip to the system (not necessary if you configured zulip
+# as the administrator user during the install process of CentOS 7).
 useradd zulip
 
 # Create a password for zulip user
@@ -173,13 +213,16 @@ zulip   ALL=(ALL)       ALL
 # Switch to zulip user
 su zulip
 
-# Enable EPEL 7 repo so we can install rabbitmq-server, redis and other dependencies
+# Enable EPEL 7 repo so we can install rabbitmq-server, redis and
+# other dependencies
 sudo yum install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
 
 # Install dependencies
-sudo yum install libffi-devel memcached rabbitmq-server openldap-devel python-devel redis postgresql-server \
-postgresql-devel postgresql libmemcached-devel wget python-pip openssl-devel freetype-devel libjpeg-turbo-devel \
-zlib-devel nodejs yuicompressor closure-compiler gettext
+sudo yum install libffi-devel memcached rabbitmq-server openldap-devel
+    python-devel redis postgresql-server postgresql-devel postgresql \
+    libmemcached-devel wget python-pip openssl-devel freetype-devel \
+    libjpeg-turbo-devel zlib-devel nodejs yuicompressor \
+    closure-compiler gettext
 
 # We need these packages to compile tsearch-extras
 sudo yum groupinstall "Development Tools"
@@ -206,17 +249,21 @@ Now continue with the Common to Fedora/CentOS instructions below.
 
 ### On OpenBSD 5.8 (experimental):
 
-These instructions are experimental and may have bugs; patches welcome!
+These instructions are experimental and may have bugs; patches
+welcome!
 
 ```
-doas pkg_add sudo bash gcc postgresql-server redis rabbitmq memcached node libmemcached py-Pillow py-cryptography py-cffi
+doas pkg_add sudo bash gcc postgresql-server redis rabbitmq \
+    memcached node libmemcached py-Pillow py-cryptography py-cffi
 
-# Get tsearch_extras and build it (using a modified version which aliases int4 on OpenBSD):
+# Get tsearch_extras and build it (using a modified version which
+# aliases int4 on OpenBSD):
 git clone https://github.com/blablacio/tsearch_extras
 cd tsearch_extras
 gmake && sudo gmake install
 
-# Point environment to custom include locations and use newer GCC (needed for Node modules):
+# Point environment to custom include locations and use newer GCC
+# (needed for Node modules):
 export CFLAGS="-I/usr/local/include -I/usr/local/include/sasl"
 export CXX=eg++
 
@@ -224,8 +271,9 @@ export CXX=eg++
 sudo mkdir /usr/local/share/postgresql/tsearch_data
 
 
-# Hack around missing dictionary files -- need to fix this to get
-# the proper dictionaries from what in debian is the hunspell-en-us package.
+# Hack around missing dictionary files -- need to fix this to get the
+# proper dictionaries from what in debian is the hunspell-en-us
+# package.
 sudo touch /usr/local/share/postgresql/tsearch_data/english.stop
 sudo touch /usr/local/share/postgresql/tsearch_data/en_us.dict
 sudo touch /usr/local/share/postgresql/tsearch_data/en_us.affix
@@ -243,8 +291,9 @@ cd ts2
 make
 sudo make install
 
-# Hack around missing dictionary files -- need to fix this to get
-# the proper dictionaries from what in debian is the hunspell-en-us package.
+# Hack around missing dictionary files -- need to fix this to get the
+# proper dictionaries from what in debian is the hunspell-en-us
+# package.
 sudo touch /usr/share/pgsql/tsearch_data/english.stop
 sudo touch /usr/share/pgsql/tsearch_data/en_us.dict
 sudo touch /usr/share/pgsql/tsearch_data/en_us.affix
@@ -252,7 +301,8 @@ sudo touch /usr/share/pgsql/tsearch_data/en_us.affix
 # Edit the postgres settings:
 sudo vi /var/lib/pgsql/data/pg_hba.conf
 
-# Add this line before the first uncommented line to enable password auth:
+# Add this line before the first uncommented line to enable password
+# auth:
 host    all             all             127.0.0.1/32            md5
 
 # Start the services
@@ -267,8 +317,8 @@ Finally continue with the All Systems instructions below.
 ### All Systems:
 
 ```
-pip install -r requirements.txt
-npm install
+pip install --no-deps -r requirements.txt
+./tools/install-phantomjs
 ./tools/download-zxcvbn
 ./tools/emoji_dump/build_emoji
 ./scripts/setup/generate_secrets.py -d
@@ -278,7 +328,12 @@ if [ $(uname) = "OpenBSD" ]; then sudo cp ./puppet/zulip/files/postgresql/zulip_
 ./tools/do-destroy-rebuild-database
 ./tools/postgres-init-test-db
 ./tools/do-destroy-rebuild-test-database
+npm install
 ```
+
+If `npm install` fails, the issue may be that you need a newer version
+of `npm`.  You can use `npm install -g npm` to update your version of
+`npm` and try again.
 
 To start the development server:
 
@@ -288,17 +343,41 @@ To start the development server:
 
 … and visit [http://localhost:9991/](http://localhost:9991/).
 
+#### Proxy setup for by-hand installation
+
+If you are building the development environment on a network where a
+proxy is required to access the Internet, you will need to set the
+proxy in the environment as follows:
+
+- On Ubuntu, set the proxy environment variables using:
+ ```
+ export https_proxy=http://proxy_host:port
+ export http_proxy=http://proxy_host:port
+ ```
+
+- And set the npm proxy and https-proxy using:
+ ```
+ npm config set proxy http://proxy_host:port
+ npm config set https-proxy http://proxy_host:port
+ ```
+
 Using Docker
 -------------
 
-You can also use Docker to develop, first you need to install Docker in your development machine following the [instructions](https://docs.docker.com/engine/installation/). Some other interesting links for somebody new in Docker are:
+You can also use Docker to develop, first you need to install Docker
+in your development machine following the
+[instructions][docker-install].
+Some other interesting links for somebody new in Docker are:
 
 * [Get Started](https://docs.docker.com/linux/started/)
 * [Understand the architecture](https://docs.docker.com/engine/introduction/understanding-docker/)
-* [Docker run reference]https://docs.docker.com/engine/reference/run/()
+* [Docker run reference](https://docs.docker.com/engine/reference/run/)
 * [Dockerfile reference](https://docs.docker.com/engine/reference/builder/)
 
-Then you should create the Docker image based on Ubuntu Linux, first go to the directory with the Zulip source code:
+[docker-install]: https://docs.docker.com/engine/installation/
+
+Then you should create the Docker image based on Ubuntu Linux, first
+go to the directory with the Zulip source code:
 
 ```
 docker build -t user/zulipdev .
@@ -308,7 +387,7 @@ Now you're going to install Zulip dependencies in the image:
 
 ```
 docker run -itv $(pwd):/srv/zulip -p 80:9991 user/zulipdev /bin/bash
-$ /usr/bin/python /srv/zulip/provision.py --docker 
+$ /usr/bin/python /srv/zulip/provision.py --docker
 docker ps -af ancestor=user/zulipdev
 docker commit -m "Zulip installed" <container id> user/zulipdev:v2
 ```
@@ -316,10 +395,12 @@ docker commit -m "Zulip installed" <container id> user/zulipdev:v2
 Finally you can run the docker server with:
 
 ```
-docker run -itv $(pwd):/srv/zulip -p 80:9991 user/zulipdev:v2 /srv/zulip/scripts/start-dockers
+docker run -itv $(pwd):/srv/zulip -p 80:9991 user/zulipdev:v2 \
+    /srv/zulip/scripts/start-dockers
 ```
 
-If you want to connect to the Docker instance to build a release tarball you can use:
+If you want to connect to the Docker instance to build a release
+tarball you can use:
 
 ```
 docker ps
@@ -335,14 +416,16 @@ docker ps
 docker kill <container id>
 ```
 
-If you want to run all the tests you need to start the servers first, you can do it with:
+If you want to run all the tests you need to start the servers first,
+you can do it with:
 
 ```
 docker run -itv $(pwd):/srv/zulip user/zulipdev:v2 /bin/bash
 $ scripts/test-all-docker
 ```
 
-You can modify the source code in your development machine and review the results in your browser.
+You can modify the source code in your development machine and review
+the results in your browser.
 
 
 Using the Development Environment
@@ -354,7 +437,7 @@ server homepage just shows a list of the users that exist on the
 server and you can login as any of them by just clicking on a user.
 This setup saves time for the common case where you want to test
 something other than the login process; to test the login process
-you'll want to change AUTHENTICATION_BACKENDS in the not-PRODUCTION
+you'll want to change `AUTHENTICATION_BACKENDS` in the not-PRODUCTION
 case of `zproject/settings.py` from zproject.backends.DevAuthBackend
 to use the auth method(s) you'd like to test.
 
@@ -370,10 +453,10 @@ browser window to see changes take effect.
 
 * If you change Python code used by the the main Django/Tornado server
 processes, these services are run on top of Django's [manage.py
-runserver](https://docs.djangoproject.com/en/1.8/ref/django-admin/#runserver-port-or-address-port),
-which will automatically restart the Zulip Django and Tornado servers
-whenever you save changes to Python code.  You can watch this happen
-in the `run-dev.py` console to make sure the backend has reloaded.
+runserver][django-runserver] which will automatically restart the
+Zulip Django and Tornado servers whenever you save changes to Python
+code.  You can watch this happen in the `run-dev.py` console to make
+sure the backend has reloaded.
 
 * The Python queue workers don't automatically restart when you save
 changes (or when they stop running), so you will want to ctrl-C and
@@ -382,28 +465,34 @@ queue workers or if a queue worker has crashed.
 
 * If you change the database schema, you'll need to use the standard
 Django migrations process to create and then run your migrations; see
-the [new feature
-tutorial](http://zulip.readthedocs.org/en/latest/new-feature-tutorial.html)
-for an example.  Additionally you should check out the [detailed
-testing docs](http://zulip.readthedocs.org/en/latest/testing.html) for
-how to run the tests properly after doing a migration.
+the [new feature tutorial][new-feature-tutorial] for an example.
+Additionally you should check out the [detailed testing
+docs][testing-docs] for how to run the tests properly after doing a
+migration.
 
 (In production, everything runs under supervisord and thus will
 restart if it crashes, and `upgrade-zulip` will take care of running
 migrations and then cleanly restaring the server for you).
 
+[django-runserver]: https://docs.djangoproject.com/en/1.8/ref/django-admin/#runserver-port-or-address-port
+[new-feature-tutorial]: http://zulip.readthedocs.org/en/latest/new-feature-tutorial.html
+[testing-docs]: http://zulip.readthedocs.org/en/latest/testing.html
+
 Running the test suite
 ======================
 
-For more details, check out the [detailed testing
-docs](http://zulip.readthedocs.org/en/latest/testing.html).
+For more details, especially on how to write tests, check out the
+[detailed testing docs][tdocs].
+
+[tdocs]: http://zulip.readthedocs.org/en/latest/testing.html
 
 To run all the tests, do this:
 ```
 ./tools/test-all
 ```
 
-For the Vagrant environment, you'll want to first enter the environment:
+For the Vagrant environment, you'll want to first enter the
+environment:
 ```
 vagrant ssh
 source /srv/zulip-venv/bin/activate
@@ -417,7 +506,7 @@ time debugging a test failure, e.g.:
 
 ```
 ./tools/lint-all # Runs all the linters in parallel
-./tools/test-backend zerver.test_bugdown.BugdownTest.test_inline_youtube
+./tools/test-backend zerver.tests.test_bugdown.BugdownTest.test_inline_youtube
 ./tools/test-js-with-casper 10-navigation.js
 ./tools/test-js-with-node # Runs all node tests but is very fast
 ```
@@ -446,5 +535,15 @@ Possible testing issues
   above. Afterwards, re-run the `init*-db` and the
   `do-destroy-rebuild*-database` scripts.
 
-- When building the development environment using Vagrant and the LXC provider, if you encounter permissions errors, you may need to `chown -R 1000:$(whoami) /path/to/zulip` on the host before running `vagrant up` in order to ensure that the synced directory has the correct owner during provision. This issue will arise if you run `id username` on the host where `username` is the user running Vagrant and the output is anything but 1000.
-  This seems to be caused by Vagrant behavior; more information can be found here https://github.com/fgrehm/vagrant-lxc/wiki/FAQ#help-my-shared-folders-have-the-wrong-owner
+- When building the development environment using Vagrant and the LXC
+  provider, if you encounter permissions errors, you may need to
+  `chown -R 1000:$(whoami) /path/to/zulip` on the host before running
+  `vagrant up` in order to ensure that the synced directory has the
+  correct owner during provision. This issue will arise if you run `id
+  username` on the host where `username` is the user running Vagrant
+  and the output is anything but 1000.
+  This seems to be caused by Vagrant behavior; for more information,
+  see [the vagrant-lxc FAQ entry about shared folder permissions
+  ][lxc-sf].
+
+[lxc-sf]: https://github.com/fgrehm/vagrant-lxc/wiki/FAQ#help-my-shared-folders-have-the-wrong-owner)

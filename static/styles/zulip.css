@@ -106,7 +106,7 @@ a {
 .app-main .column-right .right-sidebar {
     position: fixed;
     margin-top: 50px;
-    z-index:100;
+    z-index: 100;
 }
 
 .app-main .column-left .left-sidebar {
@@ -321,12 +321,6 @@ a:hover code {
     display: inline;
 }
 
-
-#streams_list:hover #streams_inline_cog {
-   visibility: visible;
-   opacity: 0.5;
-}
-
 #streams_list #streams_inline_cog:hover {
    opacity: 1.0;
 }
@@ -335,9 +329,9 @@ a:hover code {
     float: right;
     color: #000;
     text-decoration: none;
-    visibility: hidden;
     font-size: 13px;
     margin-top: 3px;
+    opacity: 0.5;
 }
 
 .tooltip {
@@ -675,6 +669,13 @@ ul.filters li.expanded_subject .topic-sidebar-arrow:hover {
 ul.filters li.muted_topic,
 ul.filters li.out_of_home_view {
     opacity: 0.25;
+}
+
+ul.filters li.out_of_home_view li.muted_topic {
+    /* If stream is muted, this resets opacity of muted topics in muted
+       stream to 1; since opacity is multiplied down through child
+       elements, this avoids an unreadable opacity of 0.25^2. */
+    opacity: 1;
 }
 
 .message_list {
@@ -1804,7 +1805,7 @@ input.recipient_box {
     padding-top: 0px;
     overflow: hidden;
     text-overflow: ellipsis;
-    float:left;
+    float: left;
     letter-spacing: normal;
     height: 40px;
 }
@@ -1941,7 +1942,7 @@ input.recipient_box {
     width: 100%;
     top: 40px;
     height: 20px;
-    z-index:99;
+    z-index: 99;
 }
 
 
@@ -2128,12 +2129,12 @@ input.recipient_box {
     text-align: center;
     padding: 4px;
     color: #ccc;
-    font-size:18px;
+    font-size: 18px;
     box-shadow: none;
     -webkit-box-shadow: none;
     -moz-box-shadow: none;
     text-shadow: none;
-    z-index:5;
+    z-index: 5;
 }
 
 #searchbox .search_button:hover {
@@ -2464,6 +2465,26 @@ div.floating_recipient {
 
 #add_new_subscription {
     text-align: center;
+}
+
+#subscriptions-status {
+    position: fixed;
+    z-index: 999;
+    display: block;
+    left: 300px;
+    right: 300px;
+    margin: 0px auto;
+    opacity: 0.9 !important;
+    top: 55px;
+    max-width: 800px;
+}
+
+#close-subscriptions-status {
+    position: absolute;
+    top: 8px;
+    cursor: pointer;
+    font-size: 17px;
+    right: 8px;
 }
 
 .subject-name {
@@ -2980,7 +3001,7 @@ li.expanded_private_message {
     vertical-align: middle;
     width: 33%;
     border-top: 1px solid #e2e2e2;
-    border-bottom:1px solid #fff;
+    border-bottom: 1px solid #fff;
     margin: 0px 5px 0px 5px;
 }
 
@@ -3199,7 +3220,8 @@ div.edit_bot {
 }
 
 .edit_bot_form .control-label,
-#create_bot_form .control-label {
+#create_bot_form .control-label,
+.admin-emoji-form .control-label {
     width: 10em;
     text-align: right;
     margin-right: 20px;
@@ -3359,11 +3381,13 @@ div.edit_bot {
 
 #administration .settings-section .admin-realm-form,
 #settings .settings-section .new-bot-form,
+#emoji-settings .new-emoji-form,
 #settings .settings-section .edit-bot-form-box {
     margin-top: 35px;
 }
 
-#settings .settings-section .new-bot-section-title {
+#settings .settings-section .new-bot-section-title,
+#emoji-settings .new-emoji-section-title {
     top: 20px;
     left: 20px;
 }
@@ -3376,12 +3400,14 @@ div.edit_bot {
 
 #settings .settings-section .account-settings-form .control-label,
 #settings .settings-section .new-bot-form .control-label,
+#emoji-settings .new-emoji-form .control-label,
 #settings .settings-section .edit-bot-form-box .control-label {
     width: 120px;
 }
 
 #settings .settings-section .account-settings-form .controls,
 #settings .settings-section .new-bot-form .controls,
+#emoji-settings .new-emoji-form .controls,
 #settings .settings-section .edit-bot-form-box .controls  {
     margin-left: 140px;
 }
@@ -3449,7 +3475,8 @@ div.edit_bot {
 }
 
 #settings .bot-information-box,
-#settings .add-new-bot-box {
+#settings .add-new-bot-box,
+#emoji-settings .add-new-emoji-box {
     background: #e3e3e3;
     padding: 10px;
     margin-left: 38px;
@@ -3460,7 +3487,8 @@ div.edit_bot {
     font-size: 14px;
 }
 
-#settings .add-new-bot-box {
+#settings .add-new-bot-box,
+#emoji-settings .add-new-emoji-box {
     background: #cbe3cb;
 }
 
@@ -3510,6 +3538,7 @@ div.edit_bot {
 
 
 #settings .settings-section .new-bot-form .control-label,
+#emoji-settings .new-emoji-form .control-label,
 #settings .settings-section .edit-bot-form-box .control-label {
     float: left;
     width: 120px;
@@ -3517,7 +3546,8 @@ div.edit_bot {
     text-align: right;
 }
 
-#settings .settings-section .new-bot-form .controls {
+#settings .settings-section .new-bot-form .controls,
+#emoji-settings .new-emoji-form .controls {
     margin-left: 110px;
 }
 
@@ -3532,6 +3562,7 @@ div.edit_bot {
 #administration .settings-section .organization-settings .admin-realm-form,
 #settings .settings-section .account-settings-form,
 #settings .settings-section .new-bot-form,
+#emoji-settings .new-emoji-form,
 #settings .settings-section .notification-settings-form,
 #settings .settings-section .display-settings-form,
 #settings .settings-section .edit-bot-form-box {
@@ -3541,6 +3572,7 @@ div.edit_bot {
 #administration .settings-section .admin-realm-form .control-label,
 #settings .settings-section .account-settings-form .control-label,
 #settings .settings-section .new-bot-form .control-label,
+#emoji-settings .new-emoji-form .control-label,
 #settings .settings-section .edit-bot-form-box .control-label {
     display: block;
     width: 120px;
@@ -3554,6 +3586,7 @@ div.edit_bot {
 #administration .settings-section .admin-realm-form .controls,
 #settings .settings-section .account-settings-form .controls,
 #settings .settings-section .new-bot-form .controls,
+#emoji-settings .new-emoji-form .controls,
 #settings .settings-section .edit-bot-form-box .controls {
     margin: auto;
     text-align: center;
@@ -3564,13 +3597,16 @@ div.edit_bot {
 #settings .settings-section .account-settings-form .controls button,
 #settings .settings-section .account-settings-form .controls input,
 #settings .settings-section .new-bot-form .controls button,
+#emoji-settings .new-emoji-form .controls button,
 #settings .settings-section .edit-bot-form-box .controls button,
 #settings .settings-section .new-bot-form .controls input,
+#emoji-settings .new-emoji-form .controls input,
 #settings .settings-section .edit-bot-form-box .controls input {
     margin: auto;
 }
 
-#settings .settings-section .new-bot-form {
+#settings .settings-section .new-bot-form,
+#emoji-settings .new-emoji-form {
     padding: 0px;
     width: 100%;
     text-align: center;
@@ -3609,6 +3645,10 @@ div.edit_bot {
 #subscriptions h1 {
     font-size: 25px;
     font-weight: 300;
+}
+
+#subscriptions h1 {
+    padding-top: 40px;
 }
 
 #administration .administration-icon,
@@ -3895,6 +3935,11 @@ form.admin-realm .control-label {
         margin-right: 7px;
     }
 
+    #subscriptions-status {
+        left: 300px;
+        right: 50px;
+    }
+
 }
 
 @media (max-width: 775px) {
@@ -3965,7 +4010,7 @@ form.admin-realm .control-label {
     }
 
     .compose-content {
-        margin-right:7px;
+        margin-right: 7px;
         margin-left: 7px;
     }
 
@@ -3979,6 +4024,10 @@ form.admin-realm .control-label {
 
     .navbar-search {
         margin-right: 81px;
+    }
+
+    #subscriptions-status {
+        left: 35px;
     }
 
 }
@@ -4182,4 +4231,27 @@ li.show-more-private-messages a {
         top: 40px;
     }
 
+}
+
+.admin_emoji_table {
+    margin: 20px auto;
+}
+
+.emoji_image {
+    width: 50px; display: block;
+}
+.emoji_image img {
+    max-width: 100%;
+}
+
+#admin-emoji-name-status, #admin-emoji-url-status {
+    margin: 20px 0 0 0;
+}
+
+.admin-table-wrapper {
+    margin: 0 38px;
+}
+
+#emoji-settings .new-emoji-form #emoji_url {
+    width: 60%;
 }

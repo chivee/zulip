@@ -1,12 +1,14 @@
 from __future__ import absolute_import
 
 from django.http import HttpResponseRedirect
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.views.decorators.csrf import csrf_exempt
 from django.http import QueryDict, HttpResponseNotAllowed
 from django.http.multipartparser import MultiPartParser
 from zerver.models import UserProfile, get_client, get_user_profile_by_email
 from zerver.lib.response import json_error, json_unauthorized
+from django.shortcuts import resolve_url
+from django.utils.decorators import available_attrs
 from django.utils.timezone import now
 from django.conf import settings
 import ujson
@@ -23,14 +25,14 @@ import base64
 import logging
 import cProfile
 from zerver.lib.mandrill_client import get_mandrill_client
-from six.moves import zip
+from six.moves import zip, urllib
 
 if settings.ZULIP_COM:
     from zilencer.models import get_deployment_by_domain, Deployment
 else:
     from mock import Mock
     get_deployment_by_domain = Mock()
-    Deployment = Mock()
+    Deployment = Mock() # type: ignore # https://github.com/JukkaL/mypy/issues/1188
 
 def get_deployment_or_userprofile(role):
     return get_user_profile_by_email(role) if "@" in role else get_deployment_by_domain(role)
@@ -49,13 +51,13 @@ def asynchronous(method):
     def wrapper(request, *args, **kwargs):
         return method(request, handler=request._tornado_handler, *args, **kwargs)
     if getattr(method, 'csrf_exempt', False):
-        wrapper.csrf_exempt = True
+        wrapper.csrf_exempt = True # type: ignore # https://github.com/JukkaL/mypy/issues/1170
     return wrapper
 
 def update_user_activity(request, user_profile):
     # update_active_status also pushes to rabbitmq, and it seems
     # redundant to log that here as well.
-    if request.META["PATH_INFO"] == '/json/update_active_status':
+    if request.META["PATH_INFO"] == '/json/users/me/presence':
         return
 
     if hasattr(request, '_query'):
@@ -89,7 +91,7 @@ def require_post(func):
 def require_realm_admin(func):
     @wraps(func)
     def wrapper(request, user_profile, *args, **kwargs):
-        if not user_profile.has_perm('administer', user_profile.realm):
+        if not user_profile.is_realm_admin:
             raise JsonableError("Must be a realm administrator")
         return func(request, user_profile, *args, **kwargs)
     return wrapper
@@ -181,8 +183,65 @@ def api_key_only_webhook_view(view_func):
         return view_func(request, user_profile, *args, **kwargs)
     return _wrapped_view_func
 
+# From Django 1.8, modified to leave off ?next=/
+def redirect_to_login(next, login_url=None,
+                      redirect_field_name=REDIRECT_FIELD_NAME):
+    """
+    Redirects the user to the login page, passing the given 'next' page
+    """
+    resolved_url = resolve_url(login_url or settings.LOGIN_URL)
+
+    login_url_parts = list(urllib.parse.urlparse(resolved_url))
+    if redirect_field_name:
+        querystring = QueryDict(login_url_parts[4], mutable=True)
+        querystring[redirect_field_name] = next
+        # Don't add ?next=/, to keep our URLs clean
+        if next != '/':
+            login_url_parts[4] = querystring.urlencode(safe='/')
+
+    return HttpResponseRedirect(urllib.parse.urlunparse(login_url_parts))
+
+# From Django 1.8
+def user_passes_test(test_func, login_url=None, redirect_field_name=REDIRECT_FIELD_NAME):
+    """
+    Decorator for views that checks that the user passes the given test,
+    redirecting to the log-in page if necessary. The test should be a callable
+    that takes the user object and returns True if the user passes.
+    """
+    def decorator(view_func):
+        @wraps(view_func, assigned=available_attrs(view_func))
+        def _wrapped_view(request, *args, **kwargs):
+            if test_func(request.user):
+                return view_func(request, *args, **kwargs)
+            path = request.build_absolute_uri()
+            resolved_login_url = resolve_url(login_url or settings.LOGIN_URL)
+            # If the login url is the same scheme and net location then just
+            # use the path as the "next" url.
+            login_scheme, login_netloc = urllib.parse.urlparse(resolved_login_url)[:2]
+            current_scheme, current_netloc = urllib.parse.urlparse(path)[:2]
+            if ((not login_scheme or login_scheme == current_scheme) and
+                    (not login_netloc or login_netloc == current_netloc)):
+                path = request.get_full_path()
+            return redirect_to_login(
+                path, resolved_login_url, redirect_field_name)
+        return _wrapped_view
+    return decorator
+
+# Based on Django 1.8's @login_required
+def zulip_login_required(function=None,
+                         redirect_field_name=REDIRECT_FIELD_NAME,
+                         login_url=settings.HOME_NOT_LOGGED_IN):
+    actual_decorator = user_passes_test(
+        lambda u: u.is_authenticated(),
+        login_url=login_url,
+        redirect_field_name=redirect_field_name
+    )
+    if function:
+        return actual_decorator(function)
+    return actual_decorator
+
 def zulip_internal(view_func):
-    @login_required(login_url = settings.HOME_NOT_LOGGED_IN)
+    @zulip_login_required
     @wraps(view_func)
     def _wrapped_view_func(request, *args, **kwargs):
         request._query = view_func.__name__
@@ -385,7 +444,7 @@ class REQ(object):
         """
 
         self.post_var_name = whence
-        self.func_var_name = None
+        self.func_var_name = None # type: str
         self.converter = converter
         self.validator = validator
         self.default = default
@@ -573,13 +632,13 @@ def profiled(func):
     """
     This decorator should obviously be used only in a dev environment.
     It works best when surrounding a function that you expect to be
-    called once.  One strategy is to write a test case in zerver/tests.py
-    and wrap the test case with the profiled decorator.
+    called once.  One strategy is to write a backend test and wrap the
+    test case with the profiled decorator.
 
     You can run a single test case like this:
 
-        # edit zerver/tests.py and place @profiled above the test case below
-        ./tools/test-backend zerver.RateLimitTests.test_ratelimit_decrease
+        # edit zerver/tests/test_external.py and place @profiled above the test case below
+        ./tools/test-backend zerver.tests.test_external.RateLimitTests.test_ratelimit_decrease
 
     Then view the results like this:
 

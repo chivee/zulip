@@ -1,4 +1,5 @@
 #!/usr/bin/env python2.7
+from __future__ import print_function
 import sys
 import re
 import json
@@ -89,7 +90,7 @@ def parse_file(fn):
         if isinstance(obj, list):
             return [clean_this(item) for item in obj]
         if isinstance(obj, dict):
-            if len(obj.keys()) == 1 and 'this' in obj:
+            if len(obj) == 1 and 'this' in obj:
                 return clean_this(obj['this'])
             return {k: clean_this(v) for k, v in obj.items()}
         return obj
@@ -98,9 +99,9 @@ def parse_file(fn):
 
 if __name__ == '__main__':
     for fn in sys.argv[1:]:
-        print '===', fn
+        print('===', fn)
         root = parse_file(fn)
         debug(root)
-        print
+        print()
 
 
